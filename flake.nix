@@ -1,41 +1,19 @@
 {
-  description = "Flake FHS - Filesystem Hierarchy Standard for Nix flakes";
+  description = "Test";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-  };
-
-  outputs =
-    inputs@{
-      self,
-      nixpkgs,
-      flake-utils,
-      ...
-    }:
+  outputs = { self, nixpkgs, ... }:
     let
-      # Get mkFlake function from Level 3 utils
-      mkFlake =
-        ((import ./utils/utils.nix).prepareUtils ./utils.more { lib = nixpkgs.lib; }.more {
-          pkgs = nixpkgs;
-        }).mkFlake;
+      utilsSystem = import ./utils/utils.nix;
+      level1 = utilsSystem.prepareUtils ./utils;
+      level2 = level1.more { lib = nixpkgs.lib; };
+      level3 = level2.more { pkgs = nixpkgs; };
+      mkFlake = level3.ffhs.mkFlake;
     in
-    (mkFlake {
+    mkFlake {
       root = [ ./. ];
-      inherit (inputs) self;
+      inherit (self) self;
       lib = nixpkgs.lib;
       nixpkgs = nixpkgs;
-      inherit inputs;
-    })
-    // {
-      # Export mkFlake function for external use
-      mkFlake =
-        args:
-        mkFlake (
-          args
-          // {
-            inputs = args.inputs or inputs;
-          }
-        );
+      inputs = {};
     };
 }

@@ -2,14 +2,15 @@
 # Provides a hierarchical API for loading utils based on dependency levels
 
 let
-  # Helper to load all .nix files from a directory (excluding .fun.nix files)
+  # Helper to load all .nix files from a directory (excluding .fun.nix and utils.nix files)
   loadModulesFromDir = dir:
     let
       dirContent = builtins.readDir dir;
       nixFiles = builtins.filter (name:
         dirContent.${name} == "regular" &&
         builtins.match ".*\\.nix$" name != null &&
-        builtins.match ".*\\.fun\\.nix$" name == null
+        builtins.match ".*\\.fun\\.nix$" name == null &&
+        name != "utils.nix"  # Exclude utils.nix itself
       ) (builtins.attrNames dirContent);
     in
     builtins.listToAttrs (

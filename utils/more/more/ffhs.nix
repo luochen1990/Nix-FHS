@@ -7,77 +7,42 @@ let
   # Import utils preparation system
   utilsSystem = import ../../utils.nix;
 
-  # Import basic utils that don't require external dependencies
-  basicUtils = utilsSystem.prepareUtils ../../...;
-
-  inherit (basicUtils.dict)
-    unionFor
-    dict
-    ;
-
-  inherit (basicUtils.list)
-    for
-    concatMap
-    ;
-
-  # System context helper
-  systemContext = selfArg: system: rec {
-    inherit system;
-    pkgs = import nixpkgs {
-      inherit system;
-      config.allowUnfree = true;
-    };
-    tools = utilsSystem.prepareUtils ../../..
-           .more { inherit lib; }
-           .more { inherit pkgs; };
-    specialArgs = {
-      self = selfArg;
-      inherit
-        system
-        pkgs
-        inputs
-        tools
-        ;
-    };
-  };
-
-  # Helper to process multiple root directories
-  eachSystem' = supportedSystems: selfArg: f: dict supportedSystems (system: f (systemContext selfArg system));
-  eachSystem = eachSystem' (lib.systems.flakeExposed or [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]);
-
-  # Discover components from multiple root directories
-  discoverComponents = fileUtils: roots: componentType:
-    unionFor roots (root:
-      let
-        componentPath = root + "/${componentType}";
-      in
-      if builtins.pathExists componentPath then
-        for (fileUtils.lsDirs componentPath) (name: {
-          inherit name root;
-          path = componentPath + "/${name}";
-        })
-      else
-        []
-    );
-
 in
 rec {
   # Main mkFlake function
-  mkFlake = args:
+  mkFlake = {
+    self,
+    lib,
+    nixpkgs,
+    inputs ? {},
+    root ? [ ./. ],
+    supportedSystems ? (lib.systems.flakeExposed or [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]),
+    nixpkgsConfig ? { allowUnfree = true; }
+  }:
     let
-      roots = args.root or [ ./. ];
-      supportedSystems = args.supportedSystems or (lib.systems.flakeExposed or [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]);
-      nixpkgsConfig = args.nixpkgsConfig or { allowUnfree = true; };
-      inputs = args.inputs or {};
+      roots = root;
 
-      # Override systemContext with custom config
+      # Import basic utils that don't require external dependencies
+      basicUtils = utilsSystem.prepareUtils (../../.. + "/utils");
+
+      inherit (basicUtils.dict)
+        unionFor
+        dict
+        ;
+
+      inherit (basicUtils.list)
+        for
+        concatMap
+        ;
+
+      # Helper functions
       systemContext' = selfArg: system: rec {
-        inherit system;
-        pkgs = import nixpkgs {
+        inherit system inputs;
+        pkgs = nixpkgs.legacyPackages.${system} or (import nixpkgs {
           inherit system;
           config = nixpkgsConfig;
-        };
-        tools = utilsSystem.prepareUtils ../../..
+        });
+        tools = utilsSystem.prepareUtils (../../.. + "/utils")
            .more { inherit lib; }
            .more { inherit pkgs; };
         specialArgs = {
@@ -92,8 +57,7 @@ rec {
         };
       };
 
-      eachSystem' = supportedSystems: selfArg: f: dict supportedSystems (system: f (systemContext' selfArg system));
-      eachSystem = eachSystem' supportedSystems args.self;
+      eachSystem = f: dict supportedSystems (system: let context = systemContext' self system; in f context);
 
       # Updated component discovery that respects multiple roots
       discoverComponents' = componentType:
@@ -161,12 +125,11 @@ rec {
         let
           components = discoverComponents' "shells";
         in
-        let
-            componentList = components;
-          in
+        if components == [] then {}
+        else
           builtins.foldl' (acc: comp: acc // {
             "${comp.name}" = import comp.path context;
-          }) {} componentList
+          }) {} components
       );
 
       apps = eachSystem (
@@ -174,12 +137,11 @@ rec {
         let
           components = discoverComponents' "apps";
         in
-        let
-            componentList = components;
-          in
+        if components == [] then {}
+        else
           builtins.foldl' (acc: comp: acc // {
             "${comp.name}" = import comp.path context;
-          }) {} componentList
+          }) {} components
       );
 
       nixosModules =
@@ -195,7 +157,7 @@ rec {
         // {
           default =
             let
-              context = systemContext' args.self "x86_64-linux";
+              context = systemContext' self "x86_64-linux";
             in
             unionFor components (
               { name, path, ... }:
@@ -206,7 +168,7 @@ rec {
       nixosConfigurations =
         let
           components = discoverComponents' "profiles";
-          context = systemContext' args.self "x86_64-linux";
+          context = systemContext' self "x86_64-linux";
           modulesList = let
             moduleComponents = discoverComponents' "modules";
           in
@@ -216,7 +178,7 @@ rec {
             profileList = components;
           in
           builtins.foldl' (acc: comp: acc // {
-            "${comp.name}" = nixpkgs.lib.nixosSystem {
+            "${comp.name}" = pkgs.lib.nixosSystem {
               system = "x86_64-linux";
               specialArgs = context.specialArgs // { name = comp.name; };
               modules = [ (comp.path + "/configuration.nix") ] ++ modulesList;
@@ -228,17 +190,16 @@ rec {
         let
           components = discoverComponents' "checks";
         in
-        let
-            componentList = components;
-          in
+        if components == [] then {}
+        else
           builtins.foldl' (acc: comp: acc // {
             "${comp.name}" = import comp.path context;
-          }) {} componentList
+          }) {} components
       );
 
       lib =
         let
-          context = systemContext' args.self "x86_64-linux";
+          context = systemContext' self "x86_64-linux";
           # Filter out system utils directory to avoid conflicts
           userUtilsComponents = builtins.filter (comp: comp.name != "utils") (discoverComponents' "utils");
         in
@@ -279,6 +240,4 @@ rec {
       );
     };
 
-  # Helper functions
-  inherit discoverComponents systemContext eachSystem;
-}
+  }
