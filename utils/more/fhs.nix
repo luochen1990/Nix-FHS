@@ -15,14 +15,7 @@ in
       nixpkgs,
       inputs ? { },
       root ? [ ./. ],
-      supportedSystems ? (
-        lib.systems.flakeExposed or [
-          "x86_64-linux"
-          "x86_64-darwin"
-          "aarch64-linux"
-          "aarch64-darwin"
-        ]
-      ),
+      supportedSystems ? lib.systems.flakeExposed,
       nixpkgsConfig ? {
         allowUnfree = true;
       },
@@ -247,11 +240,10 @@ in
 
           # Find actual utils directories (not subdirectories)
           # This should find utils/ directories directly under each root
-          findUtilsRoots =
-            map (root: {
-              name = "utils";
-              path = root + "/utils";
-            }) (builtins.filter (root: builtins.pathExists (root + "/utils")) roots);
+          findUtilsRoots = map (root: {
+            name = "utils";
+            path = root + "/utils";
+          }) (builtins.filter (root: builtins.pathExists (root + "/utils")) roots);
 
           # Process each utils directory with prepareUtils.more.more
           processUtilsDir =
