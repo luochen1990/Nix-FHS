@@ -241,17 +241,33 @@ in
 
       lib =
         let
-          context = systemContext' self "x86_64-linux";
-          # Filter out system utils directory to avoid conflicts
-          userUtilsComponents = builtins.filter (comp: comp.name != "utils") (discoverComponents' "utils");
+          # Import system utils directly from individual files
+          systemUtils = {
+            inherit (import ../dict.nix) dict dict' unionFor unionForItems attrItems;
+            inherit (import ../list.nix) for forFilter forWithIndex forItems mapFilter concatMap concatFor powerset cartesianProduct is-empty not-empty;
+            inherit (import ../file.nix) isHidden isNotHidden hasPostfix underDir lsDirsAll lsDirs lsFilesAll lsFiles elemAt findFiles findFilesRec findSubDirsContains subDirsRec isNonEmptyDir;
+            inherit (import ../utils.nix) prepareUtils;
+          };
+
+          # Get all utils components and filter out system utils directory
+          allUtilsComponents = discoverComponents' "utils";
+          userUtilsComponents = builtins.filter (comp: comp.name != "utils") allUtilsComponents;
+
+          # Process user utils directories by finding all .nix files and importing them
+          processUserUtilsDir =
+            comp:
+            let
+              # Use findFiles from systemUtils to find .nix files
+              utilsFiles = systemUtils.findFiles (systemUtils.hasPostfix "nix") comp.path;
+              # Import each file with proper context (just passing lib, as most user utils won't need more)
+              utilsResults = builtins.map (f: import f { inherit lib; }) utilsFiles;
+            in
+            builtins.foldl' (acc: result: acc // result) {} utilsResults;
+
+          # Merge all user utils
+          userUtils = builtins.foldl' (acc: comp: acc // (processUserUtilsDir comp)) {} userUtilsComponents;
         in
-        builtins.foldl' (
-          acc: comp:
-          acc
-          // {
-            "${comp.name}" = import comp.path context;
-          }
-        ) { } userUtilsComponents;
+        systemUtils // userUtils;
 
       templates =
         let
