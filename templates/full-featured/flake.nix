@@ -3,11 +3,11 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    fhs.url = "github:luochen1990/flake-fhs";
+    flake-fhs.url = "github:luochen1990/flake-fhs";
   };
 
-  outputs = { nixpkgs, fhs, ... }:
-    fhs.mkFlake {
+  outputs = { nixpkgs, flake-fhs, ... }:
+    flake-fhs.mkFlake {
       root = [ ./. ];
       supportedSystems = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" ];
       nixpkgsConfig = {

@@ -2,24 +2,58 @@
 # mkFlake function that auto-generates flake outputs from directory structure
 
 {
-  # Import other tool functions
-  utils',
   lib,
   nixpkgs,
   inputs ? {}
 }:
 
 let
-  inherit (utils')
-    for
+  # Built-in utils loading logic based on directory hierarchy
+  # Level 1: utils/ - builtins only
+  basicUtils = {
+    dict = import ./dict.nix;
+    list = import ./list.nix;
+  };
+
+  # Level 2: utils/more/ - lib dependent
+  libUtils = lib: {
+    file = import ./more/file.nix;
+  };
+
+  # Level 3: utils/more/more/ - lib and pkgs dependent (reserved for future)
+  pkgsUtils = lib: pkgs: {
+    # Future pkgs-dependent utilities can go here
+  };
+
+  # Merge all utils with proper dependency injection
+  useLib = lib: (libUtils lib) // {
+    usePkgs = pkgs: (pkgsUtils lib pkgs);
+  };
+
+  allUtils = basicUtils // {
+    inherit useLib;
+  };
+
+  # System context helper with lib parameter for file operations
+  getFileUtils = lib: let
+    fileModule = import ./more/file.nix;
+  in {
+    inherit (fileModule)
+      findFilesRec
+      hasPostfix
+      subDirsRec
+      isNotHidden
+      lsDirs
+      lsFiles;
+  };
+
+  inherit (basicUtils.dict)
     unionFor
     dict
-    findFilesRec
-    hasPostfix
-    subDirsRec
-    isNotHidden
-    lsDirs
-    lsFiles
+    ;
+
+  inherit (basicUtils.list)
+    for
     concatMap
     ;
 
@@ -30,7 +64,8 @@ let
       inherit system;
       config.allowUnfree = true;
     };
-    tools = utils' // utils'.useLib lib;
+    fileUtils = getFileUtils pkgs.lib;
+    tools = allUtils // (allUtils.useLib pkgs.lib) // fileUtils;
     specialArgs = {
       self = selfArg;
       inherit
@@ -38,6 +73,7 @@ let
         pkgs
         inputs
         tools
+        fileUtils
         ;
     };
   };
@@ -47,13 +83,13 @@ let
   eachSystem = eachSystem' (lib.systems.flakeExposed or [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ]);
 
   # Discover components from multiple root directories
-  discoverComponents = roots: componentType:
+  discoverComponents = fileUtils: roots: componentType:
     unionFor roots (root:
       let
         componentPath = root + "/${componentType}";
       in
       if builtins.pathExists componentPath then
-        for (lsDirs componentPath) (name: {
+        for (fileUtils.lsDirs componentPath) (name: {
           inherit name root;
           path = componentPath + "/${name}";
         })
@@ -77,7 +113,8 @@ rec {
           inherit system;
           config = nixpkgsConfig;
         };
-        tools = utils' // utils'.useLib lib;
+        fileUtils = getFileUtils pkgs.lib;
+        tools = allUtils // (allUtils.useLib pkgs.lib) // fileUtils;
         specialArgs = {
           self = selfArg;
           inherit
@@ -85,6 +122,7 @@ rec {
             pkgs
             inputs
             tools
+            fileUtils
             roots
             ;
         };
@@ -96,6 +134,7 @@ rec {
       # Updated component discovery that respects multiple roots
       discoverComponents' = componentType:
         let
+          fileUtils = getFileUtils lib;
           # Collect components from all roots as a flat list
           allComponents =
             concatMap (root:
@@ -103,7 +142,7 @@ rec {
                 componentPath = root + "/${componentType}";
               in
               if builtins.pathExists componentPath then
-                for (lsDirs componentPath) (name: {
+                for (fileUtils.lsDirs componentPath) (name: {
                   inherit name root;
                   path = componentPath + "/${name}";
                 })
@@ -257,7 +296,9 @@ rec {
       # Auto-generated overlay for packages
       overlays.default = final: prev:
         let
-          context = { pkgs = final; inherit (final) lib; tools = utils' // utils'.useLib final.lib; };
+          fileUtils = getFileUtils final.lib;
+          tools = allUtils // (allUtils.useLib final.lib) // fileUtils;
+          context = { pkgs = final; inherit (final) lib; inherit tools; };
         in
         buildPackages' context;
 

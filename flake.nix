@@ -8,9 +8,14 @@
 
   outputs = inputs@{ self, nixpkgs, flake-utils, ... }:
     let
-      inherit (import ./utils) mkFlake;
+      # Import mkFlake directly from fhs.fun.nix
+      mkFlakeModule = import ./utils/fhs.fun.nix {
+        lib = nixpkgs.lib;
+        inherit nixpkgs;
+        inherit inputs;
+      };
     in
-    (mkFlake {
+    (mkFlakeModule.mkFlake {
       root = [ ./. ];
       inherit (inputs) self;
       lib = nixpkgs.lib;
@@ -18,6 +23,10 @@
       inherit inputs;
     }) // {
       # Export mkFlake function for external use
-      inherit mkFlake;
+      mkFlake = args: mkFlakeModule.mkFlake (args // {
+        lib = args.lib or nixpkgs.lib;
+        nixpkgs = args.nixpkgs or nixpkgs;
+        inputs = args.inputs or inputs;
+      });
     };
 }
