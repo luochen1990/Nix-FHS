@@ -2,7 +2,7 @@
 
 let
   inherit (import ./dict.nix) unionFor;
-  inherit (import ./file.nix) findFiles hasPostfix;
+  inherit (import ./file.nix) findFiles hasPostfix isNonEmptyDir;
 in
 {
   prepareUtils =
@@ -11,9 +11,17 @@ in
     let
       lv1 = unionFor (findFiles (hasPostfix "nix") utilsPath) import;
       lv2 =
-        args: unionFor (findFiles (hasPostfix "nix") (utilsPath + "/more")) (fname: import fname args);
+        args:
+          if isNonEmptyDir (utilsPath + "/more") then
+            unionFor (findFiles (hasPostfix "nix") (utilsPath + "/more")) (fname: import fname args)
+          else
+            {};
       lv3 =
-        args: unionFor (findFiles (hasPostfix "nix") (utilsPath + "/more/more")) (fname: import fname args);
+        args:
+          if isNonEmptyDir (utilsPath + "/more/more") then
+            unionFor (findFiles (hasPostfix "nix") (utilsPath + "/more/more")) (fname: import fname args)
+          else
+            {};
     in
     {
       more =

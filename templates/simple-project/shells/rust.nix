@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs, system, ... }:
 
 pkgs.mkShell {
   name = "rust-dev";
@@ -12,6 +12,7 @@ pkgs.mkShell {
 
   shellHook = ''
     echo "🦀 Rust development environment ready!"
+    echo "System: ${system}"
     cargo --version
   '';
 }

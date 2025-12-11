@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs, system, ... }:
 
 {
   type = "app";
@@ -8,5 +8,6 @@
     echo "This app was automatically discovered and packaged."
     echo "Current time: $(date)"
     echo "System: $(uname -a)"
+    echo "Running on: ${system}"
   '');
 }

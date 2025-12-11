@@ -1,21 +1,20 @@
-{ pkgs ? import <nixpkgs> {} }:
+{ pkgs, system, ... }:
 
-{
-  default = pkgs.mkShell {
-    name = "flake-fhs-dev";
+pkgs.mkShell {
+  name = "flake-fhs-dev";
 
-    buildInputs = with pkgs; [
-      git
-      vim
-      curl
-      nixfmt
-      hello
-    ];
+  buildInputs = with pkgs; [
+    git
+    vim
+    curl
+    nixfmt
+    hello
+  ];
 
-    shellHook = ''
-      echo "🚀 Welcome to Flake FHS development environment!"
-      echo "Available commands: git, vim, curl, nixfmt, hello"
-      echo "Try: nix build .#hello-custom"
-    '';
-  };
+  shellHook = ''
+    echo "🚀 Welcome to Flake FHS development environment!"
+    echo "Available commands: git, vim, curl, nixfmt, hello"
+    echo "Try: nix build .#hello-custom"
+    echo "System: ${system}"
+  '';
 }

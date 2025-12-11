@@ -4,13 +4,11 @@
   outputs =
     { self, nixpkgs, ... }:
     let
-      utilsSystem = import ./utils/utils.nix;
-      level1 = utilsSystem.prepareUtils ./utils;
-      level2 = level1.more { lib = nixpkgs.lib; };
-      level3 = level2.more { pkgs = nixpkgs; };
-      mkFlake = level3.mkFlake;
+      utils = (((import ./utils/utils.nix).prepareUtils ./utils).more { lib = nixpkgs.lib; }).more {
+        pkgs = nixpkgs;
+      };
     in
-    mkFlake {
+    utils.mkFlake {
       root = [ ./. ];
       inherit (self) self;
       lib = nixpkgs.lib;

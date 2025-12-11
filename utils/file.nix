@@ -159,4 +159,15 @@ rec {
       ++ map (s: "${dir}/${s}") (findSubDirsContains p filename)
     ) (lsDirsAll root);
 
+  # isNonEmptyDir : Path -> Bool
+  # Check if directory exists and is non-empty (contains files, not just empty subdirectories)
+  # Similar to git logic: directories with only empty subdirectories are considered empty
+  isNonEmptyDir =
+    path:
+    let
+      # Find any regular file in the directory recursively
+      foundFiles = findFilesRec (p: true) path; # TODO: 性能优化
+    in
+    builtins.pathExists path && foundFiles != [ ];
+
 }

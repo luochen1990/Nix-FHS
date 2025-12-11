@@ -1,12 +1,10 @@
 # Flake FHS core implementation
 # mkFlake function that auto-generates flake outputs from directory structure
 
-{ lib, pkgs }:
+{ lib }:
 
 let
-  utils = (((import ../../utils.nix).prepareUtils ./../../../utils).more { inherit lib; }).more {
-    inherit pkgs;
-  };
+  utils = (((import ../utils.nix).prepareUtils ./../../utils).more { inherit lib; });
 in
 {
   # Main mkFlake function
@@ -214,7 +212,7 @@ in
           acc: comp:
           acc
           // {
-            "${comp.name}" = pkgs.lib.nixosSystem {
+            "${comp.name}" = context.pkgs.lib.nixosSystem {
               system = "x86_64-linux";
               specialArgs = context.specialArgs // {
                 name = comp.name;
