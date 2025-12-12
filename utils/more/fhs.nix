@@ -220,7 +220,7 @@ in
       checks = eachSystem (
         context:
         let
-          # First try to find check files (like packages)
+          # Find all check files (like packages)
           checkFiles = concatMap (
             root:
             let
@@ -234,6 +234,7 @@ in
                 if builtins.match ".*\\.nix$" name != null && name != "default.nix" then {
                   # Remove .nix suffix for attribute name
                   name = builtins.substring 0 (builtins.stringLength name - 4) name;
+                  type = "file";
                   path = checkPath;
                 } else null
               )
@@ -244,33 +245,27 @@ in
           # Filter out nulls
           validCheckFiles = builtins.filter (x: x != null) checkFiles;
 
-          # Debug info - create a dummy check to show what we found
-          debugInfo = {
-            roots = roots;
-            checkFiles = checkFiles;
-            validCheckFiles = validCheckFiles;
-          };
-
-          # Also check for directory-based checks (for backward compatibility)
+          # Find all directory-based checks
           directoryChecks = discoverComponents' "checks";
+
+          # Convert directory checks to include type field
+          typedDirectoryChecks = map (comp: comp // { type = "directory"; }) directoryChecks;
+
+          # Combine file and directory checks, files take precedence on name conflicts
+          allChecks =
+            let
+              fileNames = builtins.attrNames (builtins.listToAttrs (map (item: { name = item.name; value = item; }) validCheckFiles));
+              # Filter out directories that conflict with files
+              nonConflictingDirs = builtins.filter (comp: !(builtins.elem comp.name fileNames)) typedDirectoryChecks;
+            in
+            validCheckFiles ++ nonConflictingDirs;
+
         in
-        if validCheckFiles != [ ] then
-          # Use file-based checks
-          builtins.listToAttrs (map (item: {
-            name = item.name;
-            value = import item.path context;
-          }) validCheckFiles)
-        else if directoryChecks != [ ] then
-          # Use directory-based checks
-          builtins.foldl' (
-            acc: comp:
-            acc
-            // {
-              "${comp.name}" = import comp.path context;
-            }
-          ) { } directoryChecks
-        else
-          { }
+        # Generate all checks (both files and directories)
+        builtins.listToAttrs (map (item: {
+          name = item.name;
+          value = import item.path context;
+        }) allChecks)
       );
 
       lib =
