@@ -46,8 +46,8 @@ class TemplateValidator:
             "nix",
             "--extra-experimental-features", "nix-command",
             "--extra-experimental-features", "flakes",
-            "--option", "sandbox", "false",
-            "--option", "allow-dirty", "true",
+            #"--option", "sandbox", "false",
+            #"--option", "allow-dirty", "true",
             *cmd
         ]
         return subprocess.run(full_cmd, cwd=cwd, capture_output=True, text=True, timeout=120)
@@ -65,24 +65,14 @@ class TemplateValidator:
         except Exception as e:
             return TestResult("github_url", False, f"Error reading template: {e}")
 
-    def _is_sandbox_error(self, error_msg: str) -> bool:
-        """Check if error is expected sandbox restriction."""
-        return ("creating directory '/nix/var/nix/profiles'" in error_msg or
-                "Permission denied" in error_msg)
-
     def _check_flake(self, temp_dir: Path) -> TestResult:
         """Run nix flake check."""
         try:
-            result = self._run_nix(["flake", "check", "--no-build", "--quiet"], cwd=temp_dir)
+            result = self._run_nix(["flake", "check", "--no-net", "--quiet"], cwd=temp_dir)
             if result.returncode == 0:
                 return TestResult("flake_check", True, "nix flake check passed")
 
             error_msg = result.stderr.strip()
-            if self._is_sandbox_error(error_msg):
-                return TestResult(
-                    "flake_check", True,
-                    "flake check skipped due to sandbox restrictions (expected in build environment)"
-                )
             return TestResult("flake_check", False, f"nix flake check failed: {error_msg}")
         except Exception as e:
             return TestResult("flake_check", False, f"Error running flake check: {e}")
@@ -107,11 +97,14 @@ class TemplateValidator:
             flake_nix = temp_dir / "flake.nix"
             if flake_nix.exists():
                 content = flake_nix.read_text()
-                modified = content.replace(self.EXPECTED_GITHUB_URL, f"path:{self.project_root}")
+
+                # Use absolute path to avoid circular references
+                project_root_abs = str(self.project_root.resolve())
+                modified = content.replace(self.EXPECTED_GITHUB_URL, f"path:{project_root_abs}")
                 flake_nix.write_text(modified)
 
                 if "path:" in modified and self.EXPECTED_GITHUB_URL not in modified:
-                    return TestResult("temp_template", True, "Temporary template created with local path")
+                    return TestResult("temp_template", True, f"Temporary template created with path:{project_root_abs}")
                 return TestResult("temp_template", False, "Failed to replace GitHub URL")
             return TestResult("temp_template", False, "flake.nix not found in template")
         except Exception as e:
@@ -145,9 +138,9 @@ class TemplateValidator:
             if temp_dir.exists():
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
-        # Overall result: pass if no critical failures
-        critical_failures = [r for r in results if not r.passed and r.name != "flake_check"]
-        passed = len(critical_failures) == 0
+        # Overall result: pass if no failures (including flake_check)
+        failures = [r for r in results if not r.passed]
+        passed = len(failures) == 0
 
         return ValidationResult(template_name, passed, results)
 
@@ -174,15 +167,31 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Validate Flake FHS templates")
-    parser.add_argument("--templates-dir", type=Path,
-                       default=Path(__file__).parent.parent / "templates")
-    parser.add_argument("--project-root", type=Path,
-                       default=Path(__file__).parent.parent)
+
+    # Required arguments to avoid path resolution issues
+    parser.add_argument("--project-root", type=Path, default='.',
+                       help="Path to project root directory")
+    parser.add_argument("--templates-dir", type=Path, default='./templates',
+                       help="Path to templates directory")
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument("--template", type=str, help="Validate specific template only")
 
     args = parser.parse_args()
-    validator = TemplateValidator(args.templates_dir, args.project_root)
+
+    # Validate paths exist
+    if not args.templates_dir.exists():
+        print(f"❌ Templates directory not found: {args.templates_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    if not args.project_root.exists():
+        print(f"❌ Project root not found: {args.project_root}", file=sys.stderr)
+        sys.exit(1)
+
+    # Make paths absolute for reliable operations
+    templates_dir = args.templates_dir.resolve()
+    project_root = args.project_root.resolve()
+
+    validator = TemplateValidator(templates_dir, project_root)
 
     # Run validation
     if args.template:

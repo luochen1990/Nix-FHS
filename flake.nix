@@ -9,10 +9,14 @@
       };
     in
     utils.mkFlake {
-      root = [ ./. ];
-      inherit (self) self;
-      lib = nixpkgs.lib;
-      nixpkgs = nixpkgs;
-      inputs = { };
+      roots = [ ./. ];
+      supportedSystems = [ "x86_64-linux" ];
+      inherit self nixpkgs;
+      inputs = self.inputs;
+    }
+    // {
+      # Provide lib and mkFlake outputs for backward compatibility with templates
+      lib = utils;
+      mkFlake = utils.mkFlake;
     };
 }
