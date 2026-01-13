@@ -43,7 +43,7 @@
   ];
 
   # Networking configuration
-  networking.hostName = "flake-fhs-example";
+  networking.hostName = "NFHS-example";
   networking.networkmanager.enable = true;
 
   # Firewall configuration
@@ -72,9 +72,9 @@
 
   # Create a welcome message
   environment.motd = ''
-    Welcome to Flake FHS Example!
+    Welcome to NFHS Example!
 
-    This system is configured using Flake FHS with:
+    This system is configured using NFHS with:
     - Custom service on port ${toString config.services.my-service.port}
     - Development tools and utilities
     - Security hardening

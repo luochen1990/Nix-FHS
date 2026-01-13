@@ -1,4 +1,4 @@
-# Flake FHS core implementation
+# NFHS core implementation
 # mkFlake function that auto-generates flake outputs from directory structure
 
 { lib }: # 这里的 lib 是 FlakeFHS 项目的 lib

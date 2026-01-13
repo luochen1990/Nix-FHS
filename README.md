@@ -1,19 +1,18 @@
-Flake FHS
-=========
-**Flake Filesystem Hierarchy Standard**
+Nix Flake Hierarchy Standard (NFHS)
+===
 
-Flake FHS 是一个面向 Nix flake 的文件系统层级规范，它同时提供一个默认的 `flake.nix` 实现（`mkFlake`）。
-用户几乎不需要自己编写 `flake.nix`。只需将 Nix 代码放置在约定的目录结构中，Flake FHS 就会自动映射并生成所有对应的 flake outputs。
+NFHS 是一个面向 Nix flake 的目录规范，它同时提供一个默认的 `flake.nix` 实现（`mkFlake`）。
+用户几乎不需要自己编写 `flake.nix`。只需将 Nix 代码放置在约定的目录结构中，NFHS 就会自动映射并生成所有对应的 flake outputs。
 
 它是一个 **“约定优于配置”** 的 flake 项目布局标准。
 
-Flake FHS 致力于解决以下核心问题：
+NFHS 致力于解决以下核心问题：
 
 - 项目之间 flake 结构差异过大，难以理解与复用
 - 为每个项目重复编写大量 `flake.nix` boilerplate
 - 工具无法推断目录语义，导致自动化困难
 
-Flake FHS 提供：
+NFHS 提供：
 
 1. 一个 **固定、可预测、可扩展** 的 flake 项目目录规范
 2. 一个 **自动生成 flake outputs** 的默认实现
@@ -22,7 +21,7 @@ Flake FHS 提供：
 
 ## 🚀 快速开始
 
-使用 Flake FHS 时典型项目**目录结构**如下：
+使用 NFHS 时典型项目**目录结构**如下：
 
 ```
 .
@@ -36,14 +35,14 @@ Flake FHS 提供：
 └── templates/  # flake-output.templates
 ```
 
-Flake FHS 提供了若干模板来快速启动不同类型的项目：
+NFHS 提供了若干模板来快速启动不同类型的项目：
 
 ```bash
 # 创建简单项目
-nix flake init --template github:luochen1990/flake-fhs#simple-project
+nix flake init --template github:luochen1990/NFHS#simple-project
 
 # 创建完整功能项目
-nix flake init --template github:luochen1990/flake-fhs#full-featured
+nix flake init --template github:luochen1990/NFHS#full-featured
 ```
 
 这将直接为你生成一个简洁并且合法的 flake.nix 文件：
@@ -52,11 +51,11 @@ nix flake init --template github:luochen1990/flake-fhs#full-featured
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-fhs.url = "github:luochen1990/flake-fhs";
+    NFHS.url = "github:luochen1990/NFHS";
   };
 
-  outputs = { self, nixpkgs, flake-fhs, ... }:
-    flake-fhs.mkFlake {
+  outputs = { self, nixpkgs, NFHS, ... }:
+    NFHS.mkFlake {
       inherit self nixpkgs;
       roots = [ ./. ];
     };

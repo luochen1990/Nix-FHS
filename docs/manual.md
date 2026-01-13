@@ -1,12 +1,12 @@
-# Flake FHS 使用手册
+# NFHS 使用手册
 
-Flake FHS 是一个约定优于配置的 Nix flakes 项目结构框架，它通过标准化的目录结构自动生成 flake outputs，让开发者专注于业务逻辑而非配置管理。
+NFHS 是一个约定优于配置的 Nix flakes 项目结构框架，它通过标准化的目录结构自动生成 flake outputs，让开发者专注于业务逻辑而非配置管理。
 
 ## 🚀 快速开始
 
 ### 核心映射关系
 
-Flake FHS 建立了文件系统到 flake outputs 的直接映射关系：
+NFHS 建立了文件系统到 flake outputs 的直接映射关系：
 
 **文件路径 → flake output → Nix 子命令**
 
@@ -25,7 +25,7 @@ Flake FHS 建立了文件系统到 flake outputs 的直接映射关系：
 
 - **自动发现**：所有 `<name>` 来自文件/目录名，无需手动声明
 - **跨平台支持**：`<system>` 根据配置自动生成，默认使用当前系统平台
-- **零配置映射**：所有映射关系由 Flake FHS 自动完成
+- **零配置映射**：所有映射关系由 NFHS 自动完成
 - **约定优于配置**：遵循 Nixpkgs 的最佳实践和目录结构
 
 ## 📦 pkgs/ - 包定义
@@ -82,12 +82,12 @@ stdenv.mkDerivation {
 ```
 
 **工作原理**：
-- 如果 `pkgs/default.nix` 存在，Flake FHS 使用该文件导出的包
-- 如果不存在，Flake FHS 自动导出 `pkgs/` 下的所有包
+- 如果 `pkgs/default.nix` 存在，NFHS 使用该文件导出的包
+- 如果不存在，NFHS 自动导出 `pkgs/` 下的所有包
 
 ## ⚙️ modules/ - NixOS 模块
 
-在 nixpkgs 中，modules/ 目录下的模块是由 module-list.nix 手动引入的，但是在 Flake FHS 中，我们会规定 modules/ 目录的结构，并依据此规范自动发现并导入 `modules/` 目录下的所有 NixOS 模块 (生成 flake-outputs.nixosModules.default)，无需手动维护模块列表。
+在 nixpkgs 中，modules/ 目录下的模块是由 module-list.nix 手动引入的，但是在 NFHS 中，我们会规定 modules/ 目录的结构，并依据此规范自动发现并导入 `modules/` 目录下的所有 NixOS 模块 (生成 flake-outputs.nixosModules.default)，无需手动维护模块列表。
 
 ### 目录结构
 
@@ -203,7 +203,7 @@ modules/services/my-service/config.nix:
 }
 ```
 
-**Flake FHS 优势**：
+**NFHS 优势**：
 - **自动发现**：无需手动维护模块列表
 - **命名约定**：模块选项名称与目录名对应
 - **标准化**：与 Nixpkgs 兼容性好, 代码稍加改动就可以贡献到上游
@@ -326,7 +326,7 @@ apps/
   type = "app";
   program = toString (pkgs.writeScriptBin "hello-app" ''
     #!${pkgs.runtimeShell}
-    echo "Hello from Flake FHS!"
+    echo "Hello from NFHS!"
     python3 ${./hello.py}
   '');
 }
@@ -338,7 +338,7 @@ apps/
 import datetime
 
 print(f"Current time: {datetime.datetime.now()}")
-print("This is a Python application packaged with Flake FHS!")
+print("This is a Python application packaged with NFHS!")
 ```
 
 ### 使用方法
@@ -373,7 +373,7 @@ shells/
 {
   # 默认开发环境
   default = pkgs.mkShell {
-    name = "flake-fhs-dev";
+    name = "NFHS-dev";
 
     buildInputs = with pkgs; [
       git
@@ -383,7 +383,7 @@ shells/
     ];
 
     shellHook = ''
-      echo "🚀 Welcome to Flake FHS development environment!"
+      echo "🚀 Welcome to NFHS development environment!"
       echo "Available commands: git, vim, curl, nixfmt"
     '';
   };
@@ -548,7 +548,7 @@ nix flake show
 
 ## 🔄 overlays/ - 包覆盖
 
-Flake FHS 根据 `pkgs/` 目录自动生成 `flake outputs.overlays`，允许在其他项目中使用您的包。
+NFHS 根据 `pkgs/` 目录自动生成 `flake outputs.overlays`，允许在其他项目中使用您的包。
 
 ### 自动生成的 overlay
 
@@ -572,7 +572,7 @@ Flake FHS 根据 `pkgs/` 目录自动生成 `flake outputs.overlays`，允许在
       };
     in {
       # 现在可以使用您在 pkgs/ 中定义的包
-      packages.${system}.my-app = pkgs.hello;  # 来自您的 Flake FHS 项目
+      packages.${system}.my-app = pkgs.hello;  # 来自您的 NFHS 项目
     };
 }
 ```
@@ -609,7 +609,7 @@ Flake FHS 根据 `pkgs/` 目录自动生成 `flake outputs.overlays`，允许在
 
 ### 项目组织
 
-1. **遵循约定**：按照 Flake FHS 的目录结构组织代码
+1. **遵循约定**：按照 NFHS 的目录结构组织代码
 2. **保持简洁**：每个文件专注单一职责
 3. **文档先行**：为复杂功能编写说明文档
 

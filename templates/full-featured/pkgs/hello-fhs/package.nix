@@ -15,12 +15,12 @@ stdenv.mkDerivation rec {
   installPhase = ''
         mkdir -p $out/bin
         echo '#!/bin/sh
-    echo "Hello from Flake FHS package ${pname}-${version}!"' > $out/bin/hello-fhs
+    echo "Hello from NFHS package ${pname}-${version}!"' > $out/bin/hello-fhs
         chmod +x $out/bin/hello-fhs
   '';
 
   meta = {
-    description = "A simple hello package demonstrating Flake FHS";
+    description = "A simple hello package demonstrating NFHS";
     license = lib.licenses.mit;
     platforms = lib.platforms.all;
   };

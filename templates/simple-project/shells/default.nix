@@ -1,7 +1,7 @@
 { pkgs, system, ... }:
 
 pkgs.mkShell {
-  name = "flake-fhs-dev";
+  name = "NFHS-dev";
 
   buildInputs = with pkgs; [
     git
@@ -12,7 +12,7 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    echo "🚀 Welcome to Flake FHS development environment!"
+    echo "🚀 Welcome to NFHS development environment!"
     echo "Available commands: git, vim, curl, nixfmt, hello"
     echo "Try: nix build .#hello-custom"
     echo "System: ${system}"

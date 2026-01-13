@@ -10,7 +10,7 @@
     pkgs.writeShellScriptBin "status" ''
       set -euo pipefail
 
-      echo "📊 Flake FHS Project Status"
+      echo "📊 NFHS Project Status"
       echo "=========================="
       echo ""
       echo "📦 Available packages:"

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Flake FHS** (Flake Filesystem Hierarchy Standard) is a "convention over configuration" framework for Nix flakes that automatically generates flake outputs from a standardized directory structure, eliminating the need to write repetitive `flake.nix` boilerplate code.
+**NFHS** (Flake Filesystem Hierarchy Standard) is a "convention over configuration" framework for Nix flakes that automatically generates flake outputs from a standardized directory structure, eliminating the need to write repetitive `flake.nix` boilerplate code.
 
 The project follows functional programming principles inspired by Haskell, with immutable data structures, function composition, and a modular design.
 
@@ -86,11 +86,11 @@ Typical flake.nix for users:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-fhs.url = "github:luochen1990/flake-fhs";
+    NFHS.url = "github:luochen1990/NFHS";
   };
 
-  outputs = { self, nixpkgs, flake-fhs, ... }:
-    flake-fhs.mkFlake {
+  outputs = { self, nixpkgs, NFHS, ... }:
+    NFHS.mkFlake {
       inherit self nixpkgs;
       roots = [ ./. ];
     };
@@ -99,7 +99,7 @@ Typical flake.nix for users:
 
 ### Advanced Configuration
 ```nix
-flake-fhs.mkFlake {
+NFHS.mkFlake {
   inherit self nixpkgs;
   roots = [ ./. ];
   supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
