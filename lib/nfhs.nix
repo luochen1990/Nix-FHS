@@ -299,11 +299,11 @@ in
                   ...
                 }:
                 {
-                  config = lib.mkIf (lib.attrsets.getAttrFromPath it.breadcrumbs config).enable lib.mkMerge [
+                  config = lib.mkIf (lib.attrsets.getAttrFromPath it.breadcrumbs config).enable lib.mkMerge ([
                     {
                       imports = it.unguardedConfigPaths;
                     }
-                  ];
+                  ]);
                 }
               );
             }
@@ -337,11 +337,11 @@ in
                     ...
                   }:
                   {
-                    config = lib.mkIf (lib.attrsets.getAttrFromPath it.breadcrumbs config).enable lib.mkMerge [
+                    config = lib.mkIf (lib.attrsets.getAttrFromPath it.breadcrumbs config).enable (lib.mkMerge [
                       {
                         imports = it.unguardedConfigPaths;
                       }
-                    ];
+                    ]);
                   }
                 )
               );
