@@ -6,7 +6,7 @@
     let
 
       lib = nixpkgs.lib;
-      utils' = lib // (import ./utils/list.nix {}) // (import ./utils/dict.nix {}) // (import ./utils/file.nix {});
+      utils' = lib // (import ./utils/list.nix) // (import ./utils/dict.nix) // (import ./utils/file.nix);
       inherit (import ./utils/prepare-lib.nix utils') prepareLib;
       utils = prepareLib { roots = [ ./. ]; lib = lib; };
     in
