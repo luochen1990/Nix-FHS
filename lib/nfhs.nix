@@ -1,3 +1,5 @@
+# © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
+#
 # Nix FHS core implementation
 # mkFlake function that auto-generates flake outputs from directory structure
 lib:

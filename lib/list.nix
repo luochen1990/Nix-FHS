@@ -1,3 +1,5 @@
+# © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
+#
 # the tool functions which is frequently used but not contained in nixpkgs.lib
 let
   inherit (builtins)

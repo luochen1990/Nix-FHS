@@ -1,3 +1,5 @@
+# © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
+#
 # 这是本项目的 lib 引用
 lib:
 let
