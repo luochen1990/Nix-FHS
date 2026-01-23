@@ -543,6 +543,17 @@ in
         builtins.listToAttrs allTemplates;
 
       # Formatter
-      formatter = eachSystem ({ pkgs, ... }: pkgs.nixfmt-tree);
+      formatter = eachSystem (
+        { pkgs, ... }:
+        let
+          fmtCfg = self.outPath + "/treefmt.nix";
+          useTreefmt = (inputs ? treefmt-nix) && (pathExists fmtCfg);
+        in
+        if useTreefmt then
+          (inputs.treefmt-nix.lib.evalModule pkgs fmtCfg).config.build.wrapper
+        else
+          pkgs.nixfmt-rfc-style
+      );
+
     };
 }
