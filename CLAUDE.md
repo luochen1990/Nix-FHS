@@ -25,12 +25,14 @@ The framework implements an automatic mapping from directory structure to flake 
 
 ### Key Components
 
-- **utils/**: Core utility library with Haskell-inspired functional programming patterns
-  - `utils/utils.nix`: Chainable utils preparation system
-  - `utils/dict.nix`: Dictionary operations and higher-order functions
-  - `utils/list.nix`: List operations
-  - `utils/file.nix`: File system operations
-  - `utils/more/fhs.nix`: Core `mkFlake` implementation
+- **lib/**: Core utility library with Haskell-inspired functional programming patterns
+  - `lib/prepare-lib.nix`: Library loading and layering system
+  - `lib/dict.nix`: Dictionary operations and higher-order functions
+  - `lib/list.nix`: List operations
+  - `lib/file.nix`: File system operations
+  - `lib/nfhs.nix`: Core `mkFlake` implementation
+  - `lib/more/`: Extended utilities requiring `pkgs`
+    - `lib/more/package.nix`: Package helpers (e.g. `inferMainProgram`)
 
  - **templates/**: Project templates for different use cases
    - `std`: Standard template with complete nixos-config and flake outputs 1:1 naming
