@@ -3,17 +3,17 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nix-fhs.url = "github:luochen1990/Nix-FHS";
+    flake-fhs.url = "github:luochen1990/flake-fhs";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      nix-fhs,
+      flake-fhs,
       ...
     }:
-    nix-fhs.lib.mkFlake {
+    flake-fhs.lib.mkFlake {
       inherit self nixpkgs;
       roots = [ ./. ];
       supportedSystems = [

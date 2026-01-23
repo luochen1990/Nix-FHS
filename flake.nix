@@ -1,5 +1,5 @@
 {
-  description = "Nix FHS";
+  description = "Flake FHS";
 
   outputs =
     { self, nixpkgs, ... }:

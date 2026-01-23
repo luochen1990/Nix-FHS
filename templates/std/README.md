@@ -66,7 +66,7 @@
 
 ```bash
 # 创建新项目
-nix flake init --template github:luochen1990/Nix-FHS#std
+nix flake init --template github:luochen1990/flake-fhs#std
 
 # 查看项目状态
 nix run .#status

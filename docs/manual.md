@@ -1,12 +1,12 @@
-# Nix FHS 使用手册
+# Flake FHS 使用手册
 
-Nix FHS 是一个 Nix flakes 项目结构框架，它通过标准化的目录结构自动生成 flake outputs，让开发者专注于业务逻辑而非配置管理。
+Flake FHS 是一个 Nix flakes 项目结构框架，它通过标准化的目录结构自动生成 flake outputs，让开发者专注于业务逻辑而非配置管理。
 
 ## 🚀 快速开始
 
 ### 核心映射关系
 
-Nix FHS 建立了文件系统到 flake outputs 的直接映射关系：
+Flake FHS 建立了文件系统到 flake outputs 的直接映射关系：
 
 **文件路径 → flake output → Nix 子命令**
 
@@ -25,7 +25,7 @@ Nix FHS 建立了文件系统到 flake outputs 的直接映射关系：
 
 - **自动发现**：所有 `<name>` 来自文件/目录名，无需手动声明
 - **支持多种命名风格**：支持 `packages`, `devShells` 这样跟 flake output 1:1 的子目录命名，同时也支持 `pkgs`, `shells` 这样简短的子目录命名
-- **支持多个根目录**：多个根目录中的内容将由 Nix FHS 自动合并
+- **支持多个根目录**：多个根目录中的内容将由 Flake FHS 自动合并
 
 ## 📦 pkgs/ - 包定义
 
@@ -81,12 +81,12 @@ stdenv.mkDerivation {
 ```
 
 **工作原理**：
-- 如果 `pkgs/default.nix` 存在，Nix FHS 使用该文件导出的包
-- 如果不存在，Nix FHS 自动导出 `pkgs/` 下的所有包
+- 如果 `pkgs/default.nix` 存在，Flake FHS 使用该文件导出的包
+- 如果不存在，Flake FHS 自动导出 `pkgs/` 下的所有包
 
 ## ⚙️ modules/ - NixOS 模块
 
-在 nixpkgs 中，modules/ 目录下的模块是由 module-list.nix 手动引入的，但是在 Nix FHS 中，我们会规定 modules/ 目录的结构，并依据此规范自动发现并导入 `modules/` 目录下的所有 NixOS 模块 (生成 flake-outputs.nixosModules.default)，无需手动维护模块列表。
+在 nixpkgs 中，modules/ 目录下的模块是由 module-list.nix 手动引入的，但是在 Flake FHS 中，我们会规定 modules/ 目录的结构，并依据此规范自动发现并导入 `modules/` 目录下的所有 NixOS 模块 (生成 flake-outputs.nixosModules.default)，无需手动维护模块列表。
 
 ### 目录结构
 
@@ -202,7 +202,7 @@ modules/services/my-service/config.nix:
 }
 ```
 
-**Nix FHS 优势**：
+**Flake FHS 优势**：
 - **自动发现**：无需手动维护模块列表
 - **命名约定**：模块选项名称与目录名对应
 - **标准化**：与 Nixpkgs 兼容性好, 代码稍加改动就可以贡献到上游
@@ -283,7 +283,7 @@ profiles/
 
 `shared/` 目录中的配置需要由用户在 configuration.nix 中手动引入.
 
-从 Nix FHS 的角度看，这个目录并不特殊，理论上你可以用任意名字的子目录来做这件事，只要不被 Nix FHS 自动发现为特殊目录即可。
+从 Flake FHS 的角度看，这个目录并不特殊，理论上你可以用任意名字的子目录来做这件事，只要不被 Flake FHS 自动发现为特殊目录即可。
 
 ### 使用方法
 
@@ -304,7 +304,7 @@ nixos-rebuild build --flake .#server
 
 `apps/` 目录定义可直接运行的应用程序，每个子目录对应一个 `flake outputs.apps` 项。
 
-**设计说明**：`apps/` 目录与 `pkgs/` 目录使用相同的 `package.nix` 结构。Nix FHS 会自动为每个包生成对应的 `apps` 输出，使用以下规则推断程序入口点（优先级从高到低）：
+**设计说明**：`apps/` 目录与 `pkgs/` 目录使用相同的 `package.nix` 结构。Flake FHS 会自动为每个包生成对应的 `apps` 输出，使用以下规则推断程序入口点（优先级从高到低）：
 
 1. `meta.mainProgram` - 显式指定的程序名
 2. `pname` - 包名称（如果存在）
@@ -334,7 +334,7 @@ apps/
 
 writeShellScriptBin "hello-app" ''
   #!${writeShellScriptBin}
-  echo "Hello from Nix FHS!"
+  echo "Hello from Flake FHS!"
   echo "Current time: $(date)"
 ''
 // {
@@ -365,7 +365,7 @@ stdenv.mkDerivation {
     chmod +x $out/bin/deploy
   '';
 
-  meta.description = "Deployment helper for Nix FHS projects";
+  meta.description = "Deployment helper for Flake FHS projects";
   # meta.mainProgram 可选，会自动从 pname 推断为 "deploy"
 }
 ```
@@ -411,7 +411,7 @@ shells/
 {
   # 默认开发环境
   default = pkgs.mkShell {
-    name = "nix-fhs-dev";
+    name = "flake-fhs-dev";
 
     buildInputs = with pkgs; [
       git
@@ -421,7 +421,7 @@ shells/
     ];
 
     shellHook = ''
-      echo "🚀 Welcome to Nix FHS development environment!"
+      echo "🚀 Welcome to Flake FHS development environment!"
       echo "Available commands: git, vim, curl, nixfmt"
     '';
   };
@@ -526,7 +526,7 @@ lib/
 ```nix
 { lib, ...}:
 {
-  # Nix FHS 会将自定义的 lib 注入到 pkgs.lib 中
+  # Flake FHS 会将自定义的 lib 注入到 pkgs.lib 中
   xs = lib.list.join [[1 2 3] [4 5]];
 }
 ```
@@ -588,7 +588,7 @@ nix flake show
 
 ## 🧹 Formatter - 代码格式化
 
-Nix FHS 默认配置了 `formatter` 输出，使用 `nixfmt-tree` 作为格式化工具。
+Flake FHS 默认配置了 `formatter` 输出，使用 `nixfmt-tree` 作为格式化工具。
 
 ```bash
 # 格式化项目中的所有 Nix 文件
@@ -627,7 +627,7 @@ nix fmt
 
 ### 项目组织
 
-1. **遵循约定**：按照 Nix FHS 的目录结构组织代码
+1. **遵循约定**：按照 Flake FHS 的目录结构组织代码
 2. **保持简洁**：每个文件专注单一职责
 3. **文档先行**：为复杂功能编写说明文档
 

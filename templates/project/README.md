@@ -15,7 +15,7 @@
 │   ├── modules/           # NixOS 模块（可选）
 │   ├── apps/              # 应用程序（可选）
 │   ├── checks/            # 检查（可选）
-│   └── ...                # 其他 Nix FHS 目录
+│   └── ...                # 其他 Flake FHS 目录
 ├── flake.nix              # Nix flake 配置
 ├── src/                   # 项目源代码（示例）
 ├── package.json           # Node.js 项目配置（示例）
@@ -36,7 +36,7 @@
 
 ```bash
 # 创建新项目
-nix flake init --template github:luochen1990/Nix-FHS#project
+nix flake init --template github:luochen1990/flake-fhs#project
 
 # 进入开发环境
 nix develop
@@ -205,6 +205,6 @@ mkdir -p nix/modules/my-module
 
 ## 扩展阅读
 
-- [Nix FHS 手册](../../docs/manual.md)
+- [Flake FHS 手册](../../docs/manual.md)
 - [Nix Flakes 文档](https://nixos.wiki/wiki/Flakes)
 - [Nixpkgs 指南](https://nixos.org/manual/nixpkgs/stable/)

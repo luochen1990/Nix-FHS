@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Nix FHS** (Nix Flake Hierarchy Standard) is a framework for Nix flakes that automatically generates flake outputs from a standardized directory structure, eliminating the need to write repetitive `flake.nix` boilerplate code.
+**Flake FHS** (Flake Flake Hierarchy Standard) is a framework for Nix flakes that automatically generates flake outputs from a standardized directory structure, eliminating the need to write repetitive `flake.nix` boilerplate code.
 
 ## Core Architecture
 
@@ -30,7 +30,7 @@ The framework implements an automatic mapping from directory structure to flake 
   - `lib/dict.nix`: Dictionary operations and higher-order functions
   - `lib/list.nix`: List operations
   - `lib/file.nix`: File system operations
-  - `lib/nfhs.nix`: Core `mkFlake` implementation
+  - `lib/flake-fhs.nix`: Core `mkFlake` implementation
   - `lib/more/`: Extended utilities requiring `pkgs`
     - `lib/more/package.nix`: Package helpers (e.g. `inferMainProgram`)
 
@@ -89,11 +89,11 @@ Typical flake.nix for users:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    nix-fhs.url = "github:luochen1990/Nix-FHS";
+    flake-fhs.url = "github:luochen1990/flake-fhs";
   };
 
-  outputs = { self, nixpkgs, nix-fhs, ... }:
-    nix-fhs.lib.mkFlake {
+  outputs = { self, nixpkgs, flake-fhs, ... }:
+    flake-fhs.lib.mkFlake {
       inherit self nixpkgs;
     };
 }
@@ -101,7 +101,7 @@ Typical flake.nix for users:
 
 ### Advanced Configuration
 ```nix
-nix-fhs.lib.mkFlake {
+flake-fhs.lib.mkFlake {
   inherit self nixpkgs;
   roots = [ ./. ./nix ];
   supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
@@ -120,7 +120,7 @@ nix-fhs.lib.mkFlake {
 - **Type Safety**: Leverages Nix's type system extensively
 
 ### File Organization
-- Core logic in `lib/nfhs.nix`
+- Core logic in `lib/flake-fhs.nix`
 - Shared utilities in `lib/` directory
 - Templates in `templates/` with embedded documentation
 - Comprehensive manual in `docs/manual.md`

@@ -71,9 +71,9 @@
 
   # Create a welcome message
   users.motd = ''
-    Welcome to NixFHS Example!
+    Welcome to FlakeFHS Example!
 
-    This system is configured using Nix FHS with:
+    This system is configured using Flake FHS with:
     - Custom service on port ${toString config.services.my-service.port}
     - Development tools and utilities
     - Security hardening

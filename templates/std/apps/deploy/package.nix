@@ -7,7 +7,7 @@ writeShellScriptBin "deploy" ''
   set -euo pipefail
 
   # Simple deployment simulation
-  echo "🚀 Deploying Nix FHS project..."
+  echo "🚀 Deploying Flake FHS project..."
   echo ""
 
   if [ $# -eq 0 ]; then
@@ -35,5 +35,5 @@ writeShellScriptBin "deploy" ''
   echo "✅ Deployment to $target completed successfully!"
 ''
 // {
-  meta.description = "Deployment helper for Nix FHS projects";
+  meta.description = "Deployment helper for Flake FHS projects";
 }

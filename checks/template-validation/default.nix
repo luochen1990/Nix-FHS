@@ -6,7 +6,7 @@
 }:
 
 let
-  # Replicate library setup from flake.nix to ensure nfhs.nix has all dependencies
+  # Replicate library setup from flake.nix to ensure flake-fhs.nix has all dependencies
   utils' =
     lib // (import ../../lib/list.nix) // (import ../../lib/dict.nix) // (import ../../lib/file.nix);
   inherit (import ../../lib/prepare-lib.nix utils') prepareLib;
@@ -16,7 +16,7 @@ let
   };
 
   # Import the core library we are testing
-  nfhs = import ../../lib/nfhs.nix libWithUtils;
+  flake-fhs = import ../../lib/flake-fhs.nix libWithUtils;
 
   # Helper to evaluate a single template
   checkTemplate =
@@ -32,7 +32,7 @@ let
       # 1. Static Checks
       # Ensure the template uses the correct upstream URL
       urlCheck =
-        if builtins.match ".*github:luochen1990/Nix-FHS.*" flakeContent != null then
+        if builtins.match ".*github:luochen1990/flake-fhs.*" flakeContent != null then
           pkgs.writeText "check-url-${templateName}" "pass"
         else
           throw "Template ${templateName} flake.nix does not contain correct GitHub URL";
@@ -52,9 +52,9 @@ let
             nixosSystem = args: import (pkgs.path + "/nixos/lib/eval-config.nix") args;
           };
         };
-        # Inject the local lib/nfhs.nix to test current changes
-        nix-fhs = {
-          lib = nfhs;
+        # Inject the local lib/flake-fhs.nix to test current changes
+        flake-fhs = {
+          lib = flake-fhs;
         };
       };
 

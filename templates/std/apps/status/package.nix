@@ -6,7 +6,7 @@
 writeShellScriptBin "status" ''
   set -euo pipefail
 
-  echo "📊 Nix FHS Project Status"
+  echo "📊 Flake FHS Project Status"
   echo "=========================="
   echo ""
   echo "📦 Available packages:"

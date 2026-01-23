@@ -26,7 +26,7 @@ pkgs.mkShell {
   ];
 
   shellHook = ''
-    echo "🛠️  Nix FHS Development Environment Ready!"
+    echo "🛠️  Flake FHS Development Environment Ready!"
     echo ""
     echo "📋 Available development shells:"
     echo "  nix develop .#default      - Basic development environment"
@@ -45,6 +45,6 @@ pkgs.mkShell {
   '';
 
   # Custom environment variables
-  FLAKE_FHS_ENV = "development";
-  PS1 = "\\[\\033[01;32m\\][nix-fhs-dev]\\[\\033[00m\\]\\$ ";
+  CURRENT_ENV = "development";
+  PS1 = "\\[\\033[01;32m\\][flake-fhs-dev]\\[\\033[00m\\]\\$ ";
 }

@@ -30,7 +30,7 @@
 
 ```bash
 # 创建新项目
-nix flake init --template github:luochen1990/Nix-FHS#short
+nix flake init --template github:luochen1990/flake-fhs#short
 
 # 构建包
 nix build .#hello

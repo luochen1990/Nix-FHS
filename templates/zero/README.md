@@ -6,7 +6,7 @@
 
 ```bash
 # 创建新项目
-nix flake init --template github:luochen1990/Nix-FHS#zero
+nix flake init --template github:luochen1990/flake-fhs#zero
 ```
 
 ## 项目结构
@@ -97,5 +97,5 @@ EOF
 适合以下场景：
 - 需要完全控制项目结构的用户
 - 只需要特定功能的简单项目
-- 学习 Nix FHS 框架的用户
+- 学习 Flake FHS 框架的用户
 - 从零开始构建自定义项目

@@ -1,10 +1,10 @@
 # © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
 #
-# Nix FHS core implementation
+# Flake FHS core implementation
 # mkFlake function that auto-generates flake outputs from directory structure
 lib:
 let
-  nixFhsLib = lib;
+  flakeFhsLib = lib;
   inherit (builtins)
     pathExists
     listToAttrs
@@ -276,7 +276,7 @@ in
       apps = eachSystem (
         context:
         let
-          inherit (nixFhsLib.more context.pkgs) inferMainProgram;
+          inherit (flakeFhsLib.more context.pkgs) inferMainProgram;
         in
         listToAttrs (
           exploreDir roots (it: rec {
