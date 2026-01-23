@@ -597,31 +597,107 @@ nix fmt
 
 ## mkFlake 配置项
 
-`mkFlake` 函数接受以下配置参数：
+`mkFlake` 函数使用 Nix 模块系统来管理配置，提供了类型安全和可组合的配置方式。
 
-### 必需参数
+### 基本用法
 
-| 参数 | 类型 | 描述 |
-|------|------|------|
-| `self` | attrset | 当前 flake 的引用 |
-| `nixpkgs` | attrset | Nixpkgs 输入 |
+```nix
+# 简洁用法（使用默认配置）
+flake-fhs.lib.mkFlake { inherit inputs; } { }
 
-### 可选参数
+# 或直接传入空配置
+flake-fhs.lib.mkFlake { inherit inputs; } { }
+```
 
-| 参数 | 类型 | 默认值 | 描述 |
+### 配置选项
+
+`mkFlake` 接受两个参数：上下文参数和配置模块。
+
+#### 上下文参数（第一个参数）
+
+| 参数 | 类型 | 描述 | 默认值 |
+|------|------|------|--------|
+| `self` | attrset | 当前 flake 的引用 | `inputs.self` |
+| `inputs` | attrset | 所有 flake 输入 | 必需 |
+| `nixpkgs` | attrset | Nixpkgs 输入 | `inputs.nixpkgs` |
+| `lib` | attrset | Nix 函数库 | `nixpkgs.lib` |
+
+#### 配置模块选项（第二个参数）
+
+| 选项 | 类型 | 默认值 | 描述 |
 |------|------|--------|------|
-| `roots` | list | `[ ./. ]` (以及 `./nix` 若存在) | 项目根目录列表，支持多根项目结构 |
-| `inputs` | attrset | `{ }` | 其他 flake 输入 |
-| `lib` | attrset | `nixpkgs.lib` | Nix 函数库，默认从 nixpkgs.lib 获取 |
-| `supportedSystems` | list | `lib.systems.flakeExposed` | 支持的系统架构列表 |
-| `nixpkgsConfig` | attrset | `{ allowUnfree = true; }` | Nixpkgs 配置选项 |
+| `systems` | list of str | `lib.systems.flakeExposed` | 支持的系统架构列表 |
+| `nixpkgs.config` | attrs | `{ allowUnfree = true; }` | Nixpkgs 配置选项 |
+| `layout` | submodule | 见下方说明 | 目录布局配置 |
+| `flake` | attrs | `{ }` | 额外的 flake outputs（即将支持） |
+| `perSystem` | attrs | `{ }` | 每个系统的额外配置（即将支持） |
+
+#### layout 配置项
+
+`layout` 选项控制各个输出类型的目录映射，支持两种形式：
+
+1. **简写形式**：直接指定目录列表
+   ```nix
+   layout.roots = [ "" "/nix" ]
+   ```
+
+2. **完整形式**：使用 `subdirs` 字段
+   ```nix
+   layout.roots.subdirs = [ "" "/nix" ]
+   layout.packages.subdirs = [ "pkgs" "packages" ]
+   ```
+
+### 配置示例
+
+#### 基础配置
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-fhs.url = "github:luochen1990/flake-fhs";
+  };
+
+  outputs = inputs@{ flake-fhs, ... }:
+    flake-fhs.lib.mkFlake { inherit inputs; } { };
+}
+```
+
+#### 完整配置
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-fhs.url = "github:luochen1990/flake-fhs";
+  };
+
+  outputs = inputs@{ flake-fhs, ... }:
+    flake-fhs.lib.mkFlake { inherit inputs; } {
+      systems = [ "x86_64-linux" "x86_64-darwin" ];
+      nixpkgs.config = {
+        allowUnfree = true;
+        permittedInsecurePackages = [ ];
+      };
+      layout.roots = [ "" "/nix" ];
+    };
+}
+```
+
+#### 多根项目配置
+
+```nix
+flake-fhs.lib.mkFlake { inherit inputs; } {
+  layout.roots = [ "" "/nix" ];
+}
+```
 
 ### 参数说明
 
-- **roots**: 指定项目根目录列表，支持多个根目录。默认包含项目根目录，如果存在 `nix/` 目录也会自动包含。
-- **lib**: Nix 函数库，默认值为 `nixpkgs.lib`，通常无需手动指定
-- **supportedSystems**: 默认包含 x86_64-linux, x86_64-darwin, aarch64-linux, aarch64-darwin 等主流架构
-- **nixpkgsConfig**: 全局 Nixpkgs 配置，会影响所有系统上下文中的 pkgs 实例
+- **systems**: 默认包含 x86_64-linux, x86_64-darwin, aarch64-linux, aarch64-darwin 等主流架构
+- **nixpkgs.config**: 全局 Nixpkgs 配置，会影响所有系统上下文中的 pkgs 实例
+- **layout.roots**: 指定项目根目录列表，支持多个根目录。空字符串 `""` 表示项目根目录
+- **模块系统**: 使用 `lib.evalModules` 实现，提供类型安全和配置验证
 
 ## 🔗 最佳实践
 

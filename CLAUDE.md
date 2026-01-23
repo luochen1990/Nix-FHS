@@ -92,24 +92,28 @@ Typical flake.nix for users:
     flake-fhs.url = "github:luochen1990/flake-fhs";
   };
 
-  outputs = { self, nixpkgs, flake-fhs, ... }:
-    flake-fhs.lib.mkFlake {
-      inherit self nixpkgs;
-    };
+  outputs = inputs@{ flake-fhs, ... }:
+    flake-fhs.lib.mkFlake { inherit inputs; } { };
 }
 ```
 
 ### Advanced Configuration
 ```nix
-flake-fhs.lib.mkFlake {
-  inherit self nixpkgs;
-  roots = [ ./. ./nix ];
-  supportedSystems = [ "x86_64-linux" "x86_64-darwin" ];
-  nixpkgsConfig = {
+flake-fhs.lib.mkFlake { inherit inputs; } {
+  systems = [ "x86_64-linux" "x86_64-darwin" ];
+  nixpkgs.config = {
     allowUnfree = true;
   };
+  layout.roots = [ "" "/nix" ];
 }
 ```
+
+### mkFlake Architecture
+The `mkFlake` function has been redesigned to use Nix's module system (`lib.evalModules`):
+- **First parameter**: Context including `inputs`, `self`, `nixpkgs`, `lib`
+- **Second parameter**: Configuration module with type-safe options
+- **Core implementation**: `mkFlakeCore` contains the actual flake generation logic
+- **Configuration options**: Defined in `flakeFhsOptions` submodule with full type checking
 
 ## Development Guidelines
 

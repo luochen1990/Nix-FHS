@@ -60,10 +60,8 @@ nix flake init --template github:luochen1990/flake-fhs#project
     flake-fhs.url = "github:luochen1990/flake-fhs";
   };
 
-  outputs = { self, nixpkgs, flake-fhs, ... }:
-    flake-fhs.lib.mkFlake {
-      inherit self nixpkgs;
-    };
+  outputs = inputs@{ flake-fhs, ... }:
+    flake-fhs.lib.mkFlake { inherit inputs; } { };
 }
 ```
 
