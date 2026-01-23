@@ -298,16 +298,40 @@ in
       devShells = eachSystem (
         context:
         listToAttrs (
-          exploreDir roots (it: rec {
-            default-dot-nix = it.path + "/default.nix";
-            into = it.depth == 0 && outline.devShells.judge it.name || it.depth >= 1;
-            pick = it.depth == 1 && pathExists default-dot-nix;
-            out = {
-              name = concatStringsSep "/" (tail it.breadcrumbs');
-              #value = context.pkgs.callPackage default-dot-nix { };
-              value = import default-dot-nix context;
-            };
-          })
+          concatLists (
+            exploreDir roots (it: rec {
+              isShellsRoot = it.depth == 0 && outline.devShells.judge it.name;
+              isShellsSubDir = it.depth >= 1;
+
+              into = isShellsRoot || isShellsSubDir;
+
+              out =
+                if isShellsRoot then
+                  # Case 1: shells/*.nix -> devShells.*
+                  forFilter (lsFiles it.path) (
+                    fname:
+                    if hasPostfix "nix" fname then
+                      {
+                        name = lib.removeSuffix ".nix" fname;
+                        value = import (it.path + "/${fname}") context;
+                      }
+                    else
+                      null
+                  )
+                else if isShellsSubDir && pathExists (it.path + "/default.nix") then
+                  # Case 2: shells/<name>/default.nix -> devShells.<name>
+                  [
+                    {
+                      name = concatStringsSep "/" (tail it.breadcrumbs');
+                      value = import (it.path + "/default.nix") context;
+                    }
+                  ]
+                else
+                  [ ];
+
+              pick = out != [ ];
+            })
+          )
         )
       );
 

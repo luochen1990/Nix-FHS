@@ -69,7 +69,16 @@ let
       nixosConfigurations = outputs.nixosConfigurations or { };
 
       # Helper to get derivation or path
-      getDrv = item: if lib.isDerivation item then item else item;
+      getDrv =
+        name: item:
+        if lib.isDerivation item then
+          item
+        else if builtins.isPath item || builtins.isString item then
+          item
+        else
+          throw "Item '${name}' in template ${templateName} is not a derivation or path: ${
+            builtins.toJSON (if builtins.isAttrs item then builtins.attrNames item else item)
+          }";
 
       # Validate apps structure
       validateApps =
@@ -85,12 +94,21 @@ let
 
     in
     [ urlCheck ]
-    ++ (map getDrv (lib.attrValues packages))
+    ++ (lib.mapAttrsToList getDrv packages)
     ++ validateApps
     ++
       # We check that devShells evaluate and can produce their wrapper derivation
-      (map getDrv (lib.attrValues devShells))
-    ++ (map getDrv (lib.attrValues checks))
+      (lib.mapAttrsToList getDrv devShells)
+    ++ [
+      # Explicit check for devShells presence in std template
+      (
+        if templateName == "std" && devShells == { } then
+          throw "Template ${templateName} should have devShells but found none"
+        else
+          pkgs.writeText "check-devShells-presence-${templateName}" "pass"
+      )
+    ]
+    ++ (lib.mapAttrsToList getDrv checks)
     ++
       # For NixOS configs, we force evaluation of the toplevel derivation path
       # This catches evaluation errors without requiring a full system build
