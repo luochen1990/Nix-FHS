@@ -546,14 +546,20 @@ in
       formatter = eachSystem (
         { pkgs, ... }:
         let
-          fmtCfg = self.outPath + "/treefmt.nix";
-          useTreefmt = (inputs ? treefmt-nix) && (pathExists fmtCfg);
+          treefmtNix = self.outPath + "/treefmt.nix";
+          treefmtToml = self.outPath + "/treefmt.toml";
         in
-        if useTreefmt then
-          (inputs.treefmt-nix.lib.evalModule pkgs fmtCfg).config.build.wrapper
+        if pathExists treefmtNix then
+          if (inputs ? treefmt-nix) then
+            (inputs.treefmt-nix.lib.evalModule pkgs treefmtNix).config.build.wrapper
+          else
+            #NOTE: the treefmt.nix format is different here
+            #DOC: https://nixos.org/manual/nixpkgs/stable/#opt-treefmt-settings
+            pkgs.treefmt.withConfig { settings = (import treefmtNix); }
+        else if pathExists treefmtToml then
+          pkgs.treefmt.withConfig { configFile = treefmtToml; }
         else
           pkgs.nixfmt-rfc-style
       );
-
     };
 }
