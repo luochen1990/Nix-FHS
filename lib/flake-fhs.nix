@@ -261,12 +261,11 @@ let
             libSubdirs = layout.lib.subdirs;
             lib = mergedLib;
           };
-          mergedLib = flakeFhsLib // preparedLib // lib; #TODO: configurable
+          mergedLib = flakeFhsLib // preparedLib // lib; # TODO: configurable
           specialArgs = {
             inherit
               self
               system
-              pkgs
               inputs
               ;
             lib = mergedLib;
