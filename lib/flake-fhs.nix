@@ -57,10 +57,14 @@ let
       unguardedConfigPaths = concatLists (
         exploreDir paths (it: rec {
           options-dot-nix = it.path + "/options.nix";
+          default-dot-nix = it.path + "/default.nix";
           guarded = pathExists options-dot-nix;
-          into = !guarded;
+          defaulted = pathExists default-dot-nix;
+          into = !(guarded || defaulted);
           pick = !guarded;
-          out = forFilter (lsFiles it.path) (
+          out = if defaulted then
+            [ default-dot-nix ]
+          else forFilter (lsFiles it.path) (
             fname: if hasSuffix ".nix" fname then (it.path + "/${fname}") else null
           );
         })
