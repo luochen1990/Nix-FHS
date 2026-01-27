@@ -268,10 +268,12 @@ let
           description = "Extra flake outputs to merge with FHS outputs";
         };
 
-        perSystem = lib.mkOption {
-          type = lib.types.attrs;
-          default = { };
-          description = "Per-system outputs to merge";
+        nixosConfigurations = {
+          specialArgs = lib.mkOption {
+            type = lib.types.functionTo lib.types.attrs;
+            default = _: { };
+            description = "Extra specialArgs to pass to nixosSystem. Receives system as argument.";
+          };
         };
       };
     };
@@ -289,6 +291,7 @@ let
         allowUnfree = true;
       },
       layout ? defaultLayout,
+      nixosConfigurationsConfig ? { },
       ...
     }:
     let
@@ -510,8 +513,8 @@ let
                 system
                 pkgs
                 lib
-                specialArgs
                 ;
+              specialArgs = context.specialArgs // nixosConfigurationsConfig.specialArgs info.system;
               inherit modules;
             };
         in
@@ -680,6 +683,7 @@ in
         supportedSystems = config.systems;
         nixpkgsConfig = config.nixpkgs.config;
         layout = config.layout;
+        nixosConfigurationsConfig = config.nixosConfigurations;
       };
     in
     fhsFlake;
