@@ -31,40 +31,96 @@ let
     isEmptyFile
     ;
 
+  loadModule =
+    path: args:
+    let
+      m = import path;
+    in
+    if isFunction m then m args else m;
+
+  setDefaultModuleLocation =
+    if builtins.hasAttr "setDefaultModuleLocation" lib then
+      lib.setDefaultModuleLocation
+    else if
+      builtins.hasAttr "modules" lib && builtins.hasAttr "setDefaultModuleLocation" lib.modules
+    then
+      lib.modules.setDefaultModuleLocation
+    else
+      (file: m: m);
+
+  # mkOptionsModule : GuardedTreeNode -> Module
   mkOptionsModule =
-    {
-      paths,
-      modPath,
-    }:
+    it:
+    let
+      modPath = it.modPath;
+      options-dot-nix = it.path + "/options.nix";
+    in
     moduleArgs:
     let
-      rawOptions = unionFor paths (
-        path:
+      rawOptions =
         let
-          p = path + "/options.nix";
-          opts = if (isEmptyFile p) then { } else import p;
+          opts = if (isEmptyFile options-dot-nix) then { } else import options-dot-nix;
         in
-        if isFunction opts then opts moduleArgs else opts
-      );
+        if isFunction opts then opts moduleArgs else opts;
       virtualEnableOption = lib.mkEnableOption (concatStringsSep "." modPath);
       filledOptions = {
         enable = virtualEnableOption;
       }
       // rawOptions;
     in
-    {
+    setDefaultModuleLocation options-dot-nix {
       options = lib.attrsets.setAttrByPath modPath filledOptions;
+    };
+
+  # mkDefaultModule : GuardedTreeNode -> Module
+  mkDefaultModule =
+    it:
+    setDefaultModuleLocation
+      (
+        let
+          default-dot-nix = it.path + "/default.nix";
+          generated-default-dot-nix = it.path + "/.generated.default.nix";
+        in
+        if pathExists default-dot-nix then default-dot-nix else generated-default-dot-nix
+      )
+      (
+        args@{
+          lib,
+          config,
+          ...
+        }:
+        {
+          config = lib.mkIf (lib.attrsets.getAttrFromPath it.modPath config).enable (
+            lib.mkMerge (map (x: loadModule x args) it.unguardedConfigPaths)
+          );
+        }
+      );
+
+  mkGuardedTree =
+    rootModulePaths:
+    let
+      forest = map (
+        path:
+        mkGuardedTreeNode {
+          inherit path;
+          modPath = [ ];
+        }
+      ) rootModulePaths;
+    in
+    {
+      # TODO: 这里需要去重
+      guardedChildrenNodes = concatFor forest (t: t.guardedChildrenNodes);
+      unguardedConfigPaths = concatFor forest (t: t.unguardedConfigPaths);
     };
 
   mkGuardedTreeNode =
     {
       modPath,
-      paths,
-      optionsModule,
+      path,
     }:
     let
       unguardedConfigPaths = concatLists (
-        exploreDir paths (it: rec {
+        exploreDir [ path ] (it: rec {
           options-dot-nix = it.path + "/options.nix";
           default-dot-nix = it.path + "/default.nix";
           guarded = pathExists options-dot-nix;
@@ -81,31 +137,23 @@ let
         })
       );
 
-      guardedSubdirs = exploreDir paths (it: rec {
+      guardedChildrenNodes = exploreDir [ path ] (it: rec {
         options-dot-nix = it.path + "/options.nix";
         guarded = pathExists options-dot-nix;
         into = !guarded;
         pick = guarded;
-        out = {
+        out = mkGuardedTreeNode {
           modPath = it.breadcrumbs';
-          paths = [ it.path ];
-          optionsModule = mkOptionsModule {
-            modPath = it.breadcrumbs';
-            paths = [ it.path ];
-          };
+          path = it.path;
         };
       });
-
-      # TODO: 这里需要对 modPath 进行去重，暂时先假设没有重复的情况
-      children = for guardedSubdirs (subdir: mkGuardedTreeNode subdir);
     in
     {
       inherit
         modPath
-        paths
-        optionsModule
+        path
+        guardedChildrenNodes
         unguardedConfigPaths
-        children
         ;
     };
 
@@ -304,27 +352,18 @@ let
           outputBuilder context
         );
 
-      moduleSets =
-        let
-          moduleTree = mkGuardedTreeNode {
-            modPath = [ ];
-            paths = concatFor roots (
-              root:
-              forFilter layout.nixosModules.subdirs (
-                subdir:
-                let
-                  p = root + "/${subdir}";
-                in
-                if pathExists p then p else null
-              )
-            );
-            optionsModule = { };
-          };
-        in
-        {
-          guardedToplevelModules = moduleTree.children;
-          unguardedConfigPaths = moduleTree.unguardedConfigPaths;
-        };
+      moduleTree = mkGuardedTree (
+        concatFor roots (
+          root:
+          forFilter layout.nixosModules.subdirs (
+            subdir:
+            let
+              p = root + "/${subdir}";
+            in
+            if pathExists p then p else null
+          )
+        )
+      );
     in
     {
       # Generate all flake outputs
@@ -420,39 +459,20 @@ let
 
       nixosModules =
         listToAttrs (
-          concatFor moduleSets.guardedToplevelModules (it: [
+          concatFor moduleTree.guardedChildrenNodes (it: [
             {
               name = (concatStringsSep "." it.modPath) + ".options";
-              value = it.optionsModule;
+              value = (mkOptionsModule it);
             }
             {
               name = (concatStringsSep "." it.modPath) + ".config";
-              value = (
-                args@{
-                  lib,
-                  config,
-                  ...
-                }:
-                let
-                  loadModule =
-                    path:
-                    let
-                      m = import path;
-                    in
-                    if isFunction m then m args else m;
-                in
-                {
-                  config = lib.mkIf (lib.attrsets.getAttrFromPath it.modPath config).enable (
-                    lib.mkMerge (map loadModule it.unguardedConfigPaths)
-                  );
-                }
-              );
+              value = mkDefaultModule it;
             }
           ])
         )
         // {
           default = {
-            imports = moduleSets.unguardedConfigPaths;
+            imports = moduleTree.unguardedConfigPaths;
           };
         };
 
@@ -468,31 +488,12 @@ let
               modules = [
                 (it.path + "/configuration.nix")
               ]
-              ++ moduleSets.unguardedConfigPaths
-              ++ concatFor moduleSets.guardedToplevelModules (it: [
+              ++ moduleTree.unguardedConfigPaths
+              ++ concatFor moduleTree.guardedChildrenNodes (it: [
                 # Options module (always imported)
-                it.optionsModule
+                (mkOptionsModule it)
                 # Config module (guarded by enable option)
-                (
-                  args@{
-                    lib,
-                    config,
-                    ...
-                  }:
-                  let
-                    loadModule =
-                      path:
-                      let
-                        m = import path;
-                      in
-                      if isFunction m then m args else m;
-                  in
-                  {
-                    config = lib.mkIf (lib.attrsets.getAttrFromPath it.modPath config).enable (
-                      lib.mkMerge (map loadModule it.unguardedConfigPaths)
-                    );
-                  }
-                )
+                (mkDefaultModule it)
               ]);
               # TODO: partial load
               # config = lib.evalModules {
