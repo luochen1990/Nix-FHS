@@ -10,16 +10,16 @@ Flake FHS 建立了文件系统到 flake outputs 的直接映射关系：
 
 **文件路径 → flake output → Nix 子命令**
 
-| 文件路径  | 生成的 flake output  |  Nix 子命令         |
-| ------------- | ------------------ | ------------------------ |
-| `pkgs/<name>/package.nix` (或 `packages/`)      | `packages.<system>.<name>`                   | `nix build .#<name>`               |
-| `modules/<name>/...` (或 `nixosModules/`)   | `nixosModules.<name>`  | - |
-| `profiles/<name>/configuration.nix` (或 `nixosConfigurations/`, `hosts/`)   | `nixosConfigurations.<name>`  | `nixos-rebuild --flake .#<name>`    |
-| `apps/<name>/package.nix`      | `packages.<system>.<name>`, `apps.<system>.<name>` | `nix build .#<name>`, `nix run .#<name>` |
-| `shells/<name>.nix` (或 `devShells/`) | `devShells.<system>.<name>`                  | `nix develop .#<name>`             |
-| `templates/<name>/`    | `templates.<name>`                           | `nix flake init --template <url>#<name>` |
-| `lib/<name>.nix` (或 `utils/`, `tools/`)      | `lib.<name>`                                 | `nix eval .#lib.<name>`            |
-| `checks/<name>.nix` 或 `checks/<path>/default.nix` | `checks.<system>.<name>` (路径 `/` 转为 `-`) | `nix flake check .#<name>`            |
+| 子目录 (别名) | 文件模式 | 特殊文件 | 递归子目录 | 生成的 flake output | Nix 子命令 |
+| --- | --- | --- | :---: | --- | --- |
+| [`packages`](#dir-pkgs) (`pkgs`) | `<name>/package.nix` | `default.nix` | ✅ | `packages.<system>.<name>` | `nix build .#<name>` |
+| [`nixosModules`](#dir-modules) (`modules`) | `<name>/...` | `options.nix`, `default.nix` | ✅ | `nixosModules.<name>` | - |
+| [`nixosConfigurations`](#dir-profiles) (`profiles`, `hosts`) | `<name>/configuration.nix` | 无 | ✅ | `nixosConfigurations.<name>` | `nixos-rebuild --flake .#<name>` |
+| [`apps`](#dir-apps) | `<name>/package.nix` | `default.nix` | ✅ | `apps.<system>.<name>` | `nix run .#<name>` |
+| [`devShells`](#dir-shells) (`shells`) | `<name>.nix` | `default.nix` | ✅ | `devShells.<system>.<name>` | `nix develop .#<name>` |
+| [`templates`](#dir-templates) | `<name>/` | `flake.nix` | ❌ | `templates.<name>` | `nix flake init ...` |
+| [`lib`](#dir-lib) (`utils`, `tools`) | `<name>.nix` | 无 | ✅ | `lib.<name>` | `nix eval .#lib.<name>` |
+| [`checks`](#dir-checks) | `<name>.nix` | `default.nix` | ✅ | `checks.<system>.<name>` | `nix flake check .#<name>` |
 
 ### ✨ 核心特性
 
@@ -27,7 +27,7 @@ Flake FHS 建立了文件系统到 flake outputs 的直接映射关系：
 - **支持多种命名风格**：支持 `packages`, `devShells` 这样跟 flake output 1:1 的子目录命名，同时也支持 `pkgs`, `shells` 这样简短的子目录命名
 - **支持多个根目录**：多个根目录中的内容将由 Flake FHS 自动合并
 
-## 📦 pkgs/ - 包定义
+## 📦 <span id="dir-pkgs">pkgs/ - 包定义</span>
 
 `pkgs/<name>/` 目录遵循 **nixpkgs** 项目的 `pkgs/by-name/xx/<name>/` 结构规范，入口文件统一为 `package.nix`。
 
@@ -84,7 +84,7 @@ stdenv.mkDerivation {
 - 如果 `pkgs/default.nix` 存在，Flake FHS 使用该文件导出的包
 - 如果不存在，Flake FHS 自动导出 `pkgs/` 下的所有包
 
-## ⚙️ modules/ - NixOS 模块
+## ⚙️ <span id="dir-modules">modules/ - NixOS 模块</span>
 
 在 nixpkgs 中，modules/ 目录下的模块是由 module-list.nix 手动引入的，但是在 Flake FHS 中，我们会规定 modules/ 目录的结构，并依据此规范自动发现并导入 `modules/` 目录下的所有 NixOS 模块 (生成 flake-outputs.nixosModules.default)，无需手动维护模块列表。
 
@@ -210,7 +210,7 @@ modules/services/my-service/config.nix:
 
 Tips: 模块部分加载机制 的 实现原理详见 [设计文档](./modules-partial-load-design.md)
 
-## 🏗️ profiles/ - NixOS 配置
+## 🏗️ <span id="dir-profiles">profiles/ - NixOS 配置</span>
 
 `profiles/` 目录用于定义完整的 NixOS 系统配置，每个子目录对应一个 `nixosConfigurations` 输出。
 
@@ -300,7 +300,7 @@ nixos-rebuild build --flake .#server
 - **复用性**：通过 `shared/` 减少代码重复
 - **一致性**：所有配置遵循相同结构
 
-## 🚀 apps/ - 应用程序
+## 🚀 <span id="dir-apps">apps/ - 应用程序</span>
 
 `apps/` 目录定义可直接运行的应用程序，每个子目录对应一个 `flake outputs.apps` 项。
 
@@ -389,7 +389,7 @@ nix build .#hello
 nix flake show
 ```
 
-## 🔧 shells/ - 开发环境
+## 🔧 <span id="dir-shells">shells/ - 开发环境</span>
 
 `shells/` 目录定义开发环境，每个 `.nix` 文件对应一个 `flake outputs.devShells` 项。
 
@@ -462,7 +462,7 @@ nix develop .#rust
 nix develop .#python --command python --version
 ```
 
-## 📋 templates/ - 项目模板
+## 📋 <span id="dir-templates">templates/ - 项目模板</span>
 
 `templates/` 目录提供项目模板，用于快速初始化新项目。
 
@@ -498,7 +498,7 @@ nix flake init --template .#rust-cli
 nix flake show
 ```
 
-## 🛠️ lib/ - 辅助函数库
+## 🛠️ <span id="dir-lib">lib/ - 辅助函数库</span>
 
 `lib/` (或 `utils/`, `tools/`) 目录定义可在其他地方引用的辅助函数和工具。这些函数会被合并到 `flake outputs.lib` 中，并注入到 `pkgs.lib` 中以便在其他地方使用。
 
@@ -531,7 +531,7 @@ lib/
 }
 ```
 
-## ✅ checks/ - 检查和测试
+## ✅ <span id="dir-checks">checks/ - 检查和测试</span>
 
 `checks/` 目录支持文件模式和目录模式的混合结构：
 

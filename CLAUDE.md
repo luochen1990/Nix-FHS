@@ -12,16 +12,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The framework implements an automatic mapping from directory structure to flake outputs:
 
-| Directory | Generated Output | Nix Command |
-|-----------|------------------|-------------|
-| `pkgs/<name>/package.nix` | `packages.<system>.<name>` | `nix build .#<name>` |
-| `modules/<name>/...` | `nixosModules.<name>` | - |
-| `profiles/<name>/configuration.nix` | `nixosConfigurations.<name>` | `nixos-rebuild --flake .#<name>` |
-| `apps/<name>/default.nix` | `apps.<system>.<name>` | `nix run .#<name>` |
-| `shells/<name>.nix` | `devShells.<system>.<name>` | `nix develop .#<name>` |
-| `templates/<name>/` | `templates.<name>` | `nix flake init --template <url>#<name>` |
-| `utils/<name>.nix` | `lib.<name>` | `nix eval .#lib.<name>` |
-| `checks/<name>.nix` | `checks.<system>.<name>` | `nix flake check .#<name>` |
+| Subdirectories (Aliases) | File Pattern | Special Files | Recursive | Generated Output | Nix Command |
+|---|---|---|:---:|---|---|
+| `packages` (`pkgs`) | `<name>/package.nix` | `default.nix` | ✅ | `packages.<system>.<name>` | `nix build .#<name>` |
+| `nixosModules` (`modules`) | `<name>/...` | `options.nix`, `default.nix` | ✅ | `nixosModules.<name>` | - |
+| `nixosConfigurations` (`profiles`, `hosts`) | `<name>/configuration.nix` | - | ✅ | `nixosConfigurations.<name>` | `nixos-rebuild --flake .#<name>` |
+| `apps` | `<name>/package.nix` | `default.nix` | ✅ | `apps.<system>.<name>` | `nix run .#<name>` |
+| `devShells` (`shells`) | `<name>.nix` | `default.nix` | ✅ | `devShells.<system>.<name>` | `nix develop .#<name>` |
+| `templates` | `<name>/` | `flake.nix` | ❌ | `templates.<name>` | `nix flake init --template <url>#<name>` |
+| `lib` (`utils`, `tools`) | `<name>.nix` | - | ✅ | `lib.<name>` | `nix eval .#lib.<name>` |
+| `checks` | `<name>.nix` | `default.nix` | ✅ | `checks.<system>.<name>` | `nix flake check .#<name>` |
 
 ### Key Components
 
