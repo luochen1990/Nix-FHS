@@ -169,7 +169,13 @@ mkdir -p nix/modules/my-module
 # nix/modules/my-module/options.nix
 { lib, ... }:
 {
-  options.my-module.enable = lib.mkEnableOption "My module";
+  options = {
+    # 提示：Flake FHS 会根据目录结构自动嵌套选项路径并生成 enable 选项
+    customConfig = lib.mkOption {
+        type = lib.types.str;
+        default = "default";
+    };
+  };
 }
 ```
 

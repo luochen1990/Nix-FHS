@@ -98,14 +98,30 @@ modules/
 
 定义一个 Guarded 模块 (`modules/services/web-server`):
 
-1.  `options.nix`: 定义接口。注意 `enable` 选项会自动生成，无需手动定义。
+1.  `options.nix`: 定义接口。
+
+    **自动嵌套机制**：Flake FHS 会根据目录结构自动将选项嵌套到对应路径下（例如 `services.web-server`），并自动生成 `enable` 选项。你只需定义模块内部的选项字段。
+
     ```nix
     { lib, ... }:
     {
-      # 自动生成: options.services.web-server.enable
-      options.services.web-server.port = lib.mkOption {
-        type = lib.types.port;
-        default = 8080;
+      options = {
+        # 实际生成: options.services.web-server.port
+        port = lib.mkOption {
+          type = lib.types.port;
+          default = 8080;
+        };
+      };
+    }
+    ```
+
+    上述代码等效于标准 NixOS 模块：
+    ```nix
+    { lib, ... }:
+    {
+      options.services.web-server = {
+        enable = lib.mkEnableOption "services.web-server";
+        port = lib.mkOption { ... };
       };
     }
     ```

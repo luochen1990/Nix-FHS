@@ -48,6 +48,7 @@ The framework implements an advanced module loading system:
 - **Partial Loading**: Implements performance optimization by loading only necessary modules
 - **Auto-enable Options**: Automatically generates enable options for guarded modules
 - **Module Discovery**: Automatically discovers and imports modules based on directory structure
+- **Option Nesting**: Automatically nests options under module paths (e.g. `services/web-server/options.nix` -> `options.services.web-server.*`) and auto-generates `enable` option
 
 ### Module Loading Rules
 1. All unguarded directory modules are imported

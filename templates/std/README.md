@@ -106,14 +106,23 @@ stdenv.mkDerivation {
 # options.nix
 { lib, ... }:
 {
-  options.my-module.enable = lib.mkEnableOption "My module";
+  options = {
+    # 提示：Flake FHS 会根据目录结构自动嵌套选项路径并生成 enable 选项
+    # 这里最终生成: options.services.my-module.port
+    port = lib.mkOption {
+        type = lib.types.port;
+        default = 8080;
+    };
+  };
 }
 
 # config.nix
 { config, lib, ... }:
 {
-  config = lib.mkIf config.my-module.enable {
-    # 模块配置
+  # config 内容会自动包裹在 mkIf config.services.my-module.enable 中
+  config.systemd.services.my-service = {
+    enable = true;
+    serviceConfig.Port = config.services.my-module.port;
   };
 }
 ```
