@@ -21,7 +21,7 @@ let
   scopedSource = pkgs.runCommand "scoped-source" { } ''
     mkdir -p $out/pkgs/scoped
     # Define scope: injects myScopedValue
-    echo '{ pkgs, ... }: pkgs.lib.makeScope pkgs.newScope (self: { myScopedValue = "dynamic-value"; })' > $out/pkgs/scoped/scope.nix
+    echo '{ pkgs, ... }: { scope = pkgs.lib.makeScope pkgs.newScope (self: {}); args = { myScopedValue = "dynamic-value"; }; }' > $out/pkgs/scoped/scope.nix
     # Define package consuming scope
     echo '{ pkgs, myScopedValue, ... }: pkgs.runCommand "scoped-pkg" {} "echo ''${myScopedValue} > $out"' > $out/pkgs/scoped/package.nix
   '';

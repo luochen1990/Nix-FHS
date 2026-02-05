@@ -250,11 +250,22 @@ let
     };
 
   evalScopedTree =
-    currentScope: node:
+    context: currentScope: currentArgs: node:
     let
-      # 1. Determine Scope
+      # 1. Determine Scope & Args
       scopePath = node.path + "/scope.nix";
-      nextScope = if node.hasScope then (import scopePath) currentScope else currentScope;
+
+      # Calculate next
+      scopedData = if node.hasScope then (import scopePath) context else { };
+
+      # Scope: Inherit (default) or Replace (if provided)
+      baseScope = currentScope;
+      nextScope = scopedData.scope or baseScope;
+
+      # Args: Inherit & Merge
+      baseArgs = currentArgs;
+      extraArgs = scopedData.args or { };
+      nextArgs = baseArgs // extraArgs;
 
       # 2. Evaluate Package
       package-dot-nix = node.path + "/package.nix";
@@ -263,14 +274,15 @@ let
           [
             {
               name = concatStringsSep "/" node.breadcrumbs;
-              value = nextScope.callPackage package-dot-nix { };
+              # Pass accumulated args as the second argument to callPackage
+              value = nextScope.callPackage package-dot-nix nextArgs;
             }
           ]
         else
           [ ];
 
       # 3. Recurse
-      childrenPkgs = concatMap (evalScopedTree nextScope) node.children;
+      childrenPkgs = concatMap (evalScopedTree context nextScope nextArgs) node.children;
     in
     currentPkgs ++ childrenPkgs;
 
@@ -491,6 +503,7 @@ let
             pkgs
             lib
             specialArgs
+            inputs
             ;
         };
 
@@ -548,7 +561,7 @@ let
             in
             builtins.concatMap (
               pkgRoot:
-              evalScopedTree context.pkgs (mkScopedTreeNode {
+              evalScopedTree context context.pkgs { } (mkScopedTreeNode {
                 path = pkgRoot;
                 breadcrumbs = [ ];
               })

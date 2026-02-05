@@ -36,15 +36,29 @@ pkgs/
 └── default.nix  # (可选) 控制导出
 ```
 
-**Scope (依赖作用域)**
+**Scope 与 callPackage**
 
-Flake FHS 支持通过 `scope.nix` 文件来定义当前目录下的依赖作用域。这对于集成 Python、Perl 等需要特定包集的生态系统非常有用。
+Flake FHS 使用 Nix 的 `callPackage` 机制来构建软件包。`scope.nix` 文件用于配置 `callPackage` 所使用的 **Scope (上下文包集)**。
 
-当框架扫描到 `scope.nix` 时，会加载它并将其应用到当前目录及其子目录中。
+*   **作用范围**: `scope.nix` 会影响**同级目录**中的 `package.nix` 以及**所有子目录**。这意味着你可以实现从目录级到包级 (Per-Package) 的精细控制。
+*   **约定格式**: `{ pkgs, inputs, ... }: { scope = ...; args = ...; }`
 
-*约定格式*: `pkgs: newScope` (接收当前 scope，返回新的 scope)
+**参数说明**
 
-**示例：集成 Python 包**
+*   **scope**: 指定用于执行 `callPackage` 的基础包集 (Base Scope)。
+    *   例如：`pkgs.python3Packages`。
+    *   如果指定了 `scope`，则会**替换**父级的 scope（切断继承）。
+    *   如果未指定，则默认**继承**父级的 scope。
+*   **args**: 注入到 `callPackage` 的额外参数。
+    *   这些参数会作为 **第二个参数** 传递给 `callPackage`。
+    *   最终，它们可以作为参数直接传递给 `package.nix` 函数。
+
+**继承规则**
+
+*   **只提供 `args`**: **合并**。继承父级 args，并与当前 args 合并。适合注入公共依赖或配置。
+*   **提供 `scope`**: **替换**。使用提供的 `scope` 作为新基础。适合切换语言生态（如切换到 Python 环境）。注意：即使替换了 Scope，父级目录定义的 `args` 依然会被继承（除非被同名参数覆盖）。
+
+**示例 1：集成 Python 包 (目录级)**
 
 ```
 pkgs/
@@ -58,7 +72,14 @@ pkgs/
 
 `pkgs/python/scope.nix`:
 ```nix
-pkgs: pkgs.python311Packages
+{ pkgs, ... }:
+{
+  # 替换模式：切换到 Python 包集
+  scope = pkgs.python311Packages;
+  
+  # 可选：同时对该 scope 进行 override
+  # args = { ... }; 
+}
 ```
 
 `pkgs/python/pandas/package.nix`:
@@ -69,6 +90,29 @@ pkgs: pkgs.python311Packages
 buildPythonPackage {
   pname = "pandas";
   # ...
+}
+```
+
+**示例 2：Per-Package 注入参数**
+
+你可以在 `package.nix` 旁边放一个 `scope.nix` 来为该特定包注入参数：
+
+`pkgs/my-app/scope.nix`:
+```nix
+{ ... }: {
+  args = {
+    enableFeatureX = true;
+    customVersion = "1.0.0";
+  };
+}
+```
+
+`pkgs/my-app/package.nix`:
+```nix
+{ stdenv, enableFeatureX, customVersion }: # 这里可以直接接收注入的参数
+
+stdenv.mkDerivation {
+  # ... 使用 enableFeatureX 和 customVersion
 }
 ```
 

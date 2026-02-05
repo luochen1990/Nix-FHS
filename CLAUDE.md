@@ -23,13 +23,24 @@ The framework implements an automatic mapping from directory structure to flake 
 | `lib` (`utils`, `tools`) | `<name>.nix` | - | ✅ | `lib.<name>` | `nix eval .#lib.<name>` |
 | `checks` | `<name>.nix` | `default.nix` | ✅ | `checks.<system>.<name>` | `nix flake check .#<name>` |
 
-### Package Scope System
+### Package Scope System (callPackage)
 
-The framework supports custom dependency scopes for packages via `scope.nix`:
-- **File**: `<dir>/scope.nix`
-- **Function**: `pkgs: newScope`
-- **Behavior**: The returned scope applies to `package.nix` in the current directory and recursively to subdirectories.
-- **Usage**: Essential for Python, Perl, and other language-specific package sets.
+The framework uses `callPackage` to build packages. You can customize the `callPackage` context (scope) via `scope.nix`.
+
+- **File**: `<dir>/scope.nix` (Applies to current directory and subdirectories)
+- **Mechanism**:
+  - `package.nix` is built using `currentScope.callPackage`.
+  - `scope.nix` modifies `currentScope` for its directory (and children).
+- **Signature**: `{ pkgs, inputs, ... }: { scope = ...; args = ...; }`
+  - **scope** (Optional): The base package set (e.g., `pkgs.pythonPackages`) to use for `callPackage`.
+    - If provided: **Replaces** the parent scope.
+    - If omitted: **Inherits** the parent scope.
+  - **args** (Optional): Attributes to pass as the **second argument** to `callPackage`.
+    - These are merged with inherited args from parent directories.
+    - Useful for injecting dependencies or configuration into `package.nix`.
+- **Granularity**: Works at both directory level (for groups of packages) and package level (sibling of `package.nix`).
+- **Usage**: Essential for Python, Perl, and other language-specific package sets, or for injecting parameters into packages.
+
 
 ### Key Components
 
