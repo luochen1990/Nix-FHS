@@ -546,24 +546,29 @@ let
         ++ concatFor moduleTree.guardedChildrenNodes (it: [
           (mkOptionsModule optionsMode it)
           (mkDefaultModule optionsMode it)
-        ]) ++ [
-          nixpkgsVersionModule
+        ])
+        ++ [
           hostnameModule
         ];
 
       # Inject hostname by default
-      hostnameModule = {hostname, lib, ...}: {
-        networking.hostName = lib.mkDefault hostname;
-      };
+      hostnameModule =
+        { hostname, lib, ... }:
+        {
+          networking.hostName = lib.mkDefault hostname;
+        };
 
-      # Nixpkgs version module
-      nixpkgsVersionModule = {
+      # This module makes colmena & nixosConfigurations produce exactly the same toplevel outPath
+      colmenaShimModule = {
+        # Fix VersionName diff between colmena & nixosConfigurations
         system.nixos.revision = nixpkgs.rev or nixpkgs.dirtyRev or null;
         system.nixos.versionSuffix =
           if nixpkgs ? lastModifiedDate && nixpkgs ? shortRev then
             ".${builtins.substring 0 8 nixpkgs.lastModifiedDate}.${nixpkgs.shortRev}"
           else
             "";
+        # Fix NIX_PATH diff between colmena & nixosConfigurations
+        nixpkgs.flake.source = nixpkgs.outPath;
       };
 
       # Discover hosts
@@ -703,7 +708,9 @@ let
           host:
           let
             sysContext = mkSysContext host.info.system;
-            modules = [ (host.path + "/configuration.nix") ] ++ sharedModules;
+            modules = sharedModules ++ [
+              (host.path + "/configuration.nix")
+            ];
           in
           {
             name = host.name;
@@ -716,7 +723,7 @@ let
                 hostname = host.name;
               };
               modules = modules ++ [
-                { nixpkgs.config = nixpkgsConfig; } #NOTE: NOT `nixpkgs.pkgs = sysContext.pkgs;`
+                { nixpkgs.pkgs = sysContext.pkgs; }
               ];
             };
           }
@@ -817,7 +824,10 @@ let
                 name = host.name;
                 value = {
                   deployment.allowLocalDeployment = true;
-                  imports = [ (host.path + "/configuration.nix") ] ++ sharedModules;
+                  imports = sharedModules ++ [
+                    (host.path + "/configuration.nix")
+                    colmenaShimModule
+                  ];
                 };
               }) validHosts
             )
