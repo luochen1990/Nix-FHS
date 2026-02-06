@@ -182,8 +182,8 @@ modules/
 ├── services/
 │   └── web-server/       # Guarded: 包含 options.nix
 │       ├── options.nix   # -> 总是导入
-│       ├── config.nix    # -> 仅当 config.services.web-server.enable = true 时导入
-│       └── sub-helper/   # -> 不会被扫描！(递归在此终止)
+│       ├── config.nix    # -> 仅当 config.services.web-server.enable = true 时生效
+│       └── sub-helper/   # -> 递归扫描并自动导入
 └── personal/
     └── config.nix        # -> 自动导入
 ```
@@ -194,13 +194,15 @@ modules/
 
 1.  `options.nix`: 定义接口。
 
-    **自动嵌套机制**：Flake FHS 会根据目录结构自动将选项嵌套到对应路径下（例如 `services.web-server`），并自动生成 `enable` 选项。你只需定义模块内部的选项字段。
+    **严格模式 (Strict Mode)**：默认情况下，`optionsMode` 为 `strict`。你需要显式定义完整的选项路径（例如 `options.services.web-server`），框架会检查其是否匹配目录结构。
+
+    **自动 Enable**：框架会自动在模块路径下生成 `enable` 选项（如果未手动定义）。
 
     ```nix
     { lib, ... }:
     {
-      options = {
-        # 实际生成: options.services.web-server.port
+      options.services.web-server = {
+        # 需完整写出 options.services.web-server
         port = lib.mkOption {
           type = lib.types.port;
           default = 8080;
@@ -209,16 +211,7 @@ modules/
     }
     ```
 
-    上述代码等效于标准 NixOS 模块：
-    ```nix
-    { lib, ... }:
-    {
-      options.services.web-server = {
-        enable = lib.mkEnableOption "services.web-server";
-        port = lib.mkOption { ... };
-      };
-    }
-    ```
+    这使得你可以直接使用标准的 NixOS 模块定义方式，同时享受自动生成的 `enable` 选项。
 
 2.  `config.nix`: 实现逻辑。默认会被包裹在 `mkIf cfg.enable { ... }` 中。
     ```nix
@@ -478,7 +471,7 @@ layout.packages.subdirs = [ "pkgs" "my-packages" ];
 
 *   **遵循约定**：尽量使用框架默认的目录结构，减少自定义配置。
 *   **模块化**：将复杂的系统配置拆分为小的、可复用的模块 (`modules/`)。
-*   **按需导出**：利用 `pkgs/default.nix` 隐藏内部辅助包，保持对外接口的整洁。
+*   **利用封装**：如果一个包需要多个辅助文件，请使用目录模式（即创建 `pkgs/<name>/package.nix`）。该目录下的其他 `.nix` 文件（如 `helper.nix`）不会被自动扫描为独立包，从而保持对外接口的整洁。
 
 ### 2. 开发流程
 
@@ -488,4 +481,4 @@ layout.packages.subdirs = [ "pkgs" "my-packages" ];
 
 ### 3. 性能优化
 
-*   **部分加载**：对于拥有大量 NixOS 模块的项目，Flake FHS 的模块加载机制（Guarded Modules）可以显著减少 evaluation 时间。确保将独立的模块放入带有 `options.nix` 的子目录中，这样只有在 `enable = true` 时才会加载其配置。
+*   **模块化管理**：对于拥有大量 NixOS 模块的项目，Flake FHS 的模块加载机制（Guarded Modules）可以帮助你更好地组织代码。确保将独立的模块放入带有 `options.nix` 的子目录中，这样只有在 `enable = true` 时才会激活其配置逻辑。
