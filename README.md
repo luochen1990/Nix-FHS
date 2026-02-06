@@ -133,7 +133,6 @@ Flake FHS 将文件系统的目录结构直接映射为 Flake Outputs：
     {
       imports = [ ./hardware-configuration.nix ];
       system.stateVersion = "26.05";
-      networking.hostName = "my-machine";
     }
     ```
     部署：`nixos-rebuild switch --flake .#my-machine`

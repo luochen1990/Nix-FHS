@@ -546,7 +546,15 @@ let
         ++ concatFor moduleTree.guardedChildrenNodes (it: [
           (mkOptionsModule optionsMode it)
           (mkDefaultModule optionsMode it)
-        ]);
+        ]) ++ [
+          nixpkgsVersionModule
+          hostnameModule
+        ];
+
+      # Inject hostname by default
+      hostnameModule = {hostname, lib, ...}: {
+        networking.hostName = lib.mkDefault hostname;
+      };
 
       # Nixpkgs version module
       nixpkgsVersionModule = {
@@ -708,8 +716,7 @@ let
                 hostname = host.name;
               };
               modules = modules ++ [
-                { nixpkgs.pkgs = sysContext.pkgs; }
-                nixpkgsVersionModule
+                { nixpkgs.config = nixpkgsConfig; } #NOTE: NOT `nixpkgs.pkgs = sysContext.pkgs;`
               ];
             };
           }
@@ -810,7 +817,7 @@ let
                 name = host.name;
                 value = {
                   deployment.allowLocalDeployment = true;
-                  imports = [ (host.path + "/configuration.nix") ] ++ sharedModules ++ [ nixpkgsVersionModule ];
+                  imports = [ (host.path + "/configuration.nix") ] ++ sharedModules;
                 };
               }) validHosts
             )
