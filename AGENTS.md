@@ -185,6 +185,11 @@ The `mkFlake` function has been redesigned to use Nix's module system (`lib.eval
 
 ## Development Guidelines
 
+### AGENTS.md Maintenance Principles
+- **Pattern over Enumeration**: Describe structures using patterns (e.g., `manual-*.md`) instead of exhaustive lists to reduce maintenance burden and noise.
+- **Mechanism Focus**: Explain *shared mechanisms* (e.g., "Scoped Package Tree") to guide logical consistency across related components.
+- **Conciseness**: Keep instructions high-level and directive. Avoid redundancy with the actual documentation content.
+
 ### Core Principles
 - **SSOT & DRY**: Central `mkFlake` function handles all output generation
 - **Convention Over Configuration**: Standardized directory structure eliminates boilerplate
@@ -202,12 +207,14 @@ The `mkFlake` function has been redesigned to use Nix's module system (`lib.eval
 2. **Module System**: Maintain guarded/unguarded module loading behavior
 3. **Template Updates**: Ensure templates work with current `mkFlake` implementation
 4. **Testing**: Run template validation after changes that affect flake outputs
+5. **Documentation**: Update `docs/manual.md` and related split documents (`manual-*.md`) when features change. Ensure the "Scoped Package Tree" concept is consistent across `pkgs`, `apps`, `checks` documentation.
 
-## Documentation
+## Documentation Structure
 
-- **User Manual**: `docs/manual.md` (comprehensive usage guide in Chinese)
-- **Template READMEs**: Individual template documentation
-- **Inline Comments**: Extensive comments in Nix files explaining design decisions
-- **Code Examples**: Each template includes working examples
+The manual is modularized (`docs/manual-*.md`) with `docs/manual.md` as the entry point.
 
-The project is well-documented for Chinese-speaking users and includes detailed explanations of design patterns and usage examples.
+- **Core Reference**: `docs/manual-pkgs.md` defines the "Scoped Package Tree" model used by `pkgs`, `apps`, `shells`, and `checks`.
+- **Maintenance**:
+  - Update `manual.md` for high-level directory mapping changes.
+  - Update `manual-pkgs.md` for shared build/scope mechanism changes.
+  - Update specific `manual-*.md` files for feature-specific changes.
