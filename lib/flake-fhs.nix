@@ -222,98 +222,61 @@ let
   # ================================================================
   # Tree Traversal (Scoped)
   # ================================================================
-  mkScopedTreeNode =
-    {
-      path,
-      breadcrumbs,
-    }:
-    let
-      # 1. File Packages: *.nix files in current dir (excluding special ones)
-      filePackages = forFilter (lsFiles path) (
-        fname:
-        if
-          hasSuffix ".nix" fname && fname != "scope.nix" && fname != "default.nix" && fname != "package.nix"
-        then
-          {
-            name = lib.removeSuffix ".nix" fname;
-            path = path + "/${fname}";
-          }
-        else
-          null
-      );
-
-      # 2. Directory Packages & Sub-scopes
-      children = exploreDir [ path ] (it: rec {
-        scopePath = it.path + "/scope.nix";
-        packagePath = it.path + "/package.nix";
-        hasScope = pathExists scopePath;
-        hasPackage = pathExists packagePath;
-
-        # We pick this node if it has scope or package.
-        isInteresting = hasScope || hasPackage;
-        pick = isInteresting;
-
-        # Stop recursion if we hit a package boundary.
-        into = !hasPackage;
-
-        out = mkScopedTreeNode {
-          path = it.path;
-          breadcrumbs = breadcrumbs ++ it.breadcrumbs';
-        };
-      });
-    in
-    {
-      inherit path breadcrumbs;
-      hasScope = pathExists (path + "/scope.nix");
-      hasPackage = pathExists (path + "/package.nix");
-      inherit filePackages children;
-    };
-
-  evalScopedTree =
-    context: currentScope: currentArgs: node:
+  # loadScopedTree :: Context -> Scope -> Args -> Path -> [String] -> [ { name :: String; value :: Derivation; } ]
+  loadScopedTree =
+    context: currentScope: currentArgs: path: breadcrumbs:
     let
       # 1. Determine Scope & Args
-      scopePath = node.path + "/scope.nix";
-
-      # Calculate next
-      scopedData = if node.hasScope then (import scopePath) context else { };
+      scopePath = path + "/scope.nix";
+      scopedData = if pathExists scopePath then (import scopePath) context else { };
 
       # Scope: Inherit (default) or Replace (if provided)
-      baseScope = currentScope;
-      nextScope = scopedData.scope or baseScope;
+      nextScope = scopedData.scope or currentScope;
 
       # Args: Inherit & Merge
-      baseArgs = currentArgs;
-      extraArgs = scopedData.args or { };
-      nextArgs = baseArgs // extraArgs;
+      nextArgs = currentArgs // (scopedData.args or { });
 
       # 2. Evaluate Packages
 
       # 2.1 Directory Package (package.nix)
+      pkgPath = path + "/package.nix";
+      hasPackage = pathExists pkgPath;
       dirPkg =
-        if node.hasPackage then
+        if hasPackage then
           [
             {
-              name = concatStringsSep "/" node.breadcrumbs;
-              # Pass accumulated args as the second argument to callPackage
-              value = nextScope.callPackage (node.path + "/package.nix") nextArgs;
+              name = concatStringsSep "/" breadcrumbs;
+              value = nextScope.callPackage pkgPath nextArgs;
             }
           ]
         else
           [ ];
 
       # 2.2 File Packages (*.nix)
-      filePkgs = map (p: {
-        name = concatStringsSep "/" (node.breadcrumbs ++ [ p.name ]);
-        value = nextScope.callPackage p.path nextArgs;
-      }) node.filePackages;
-
-      currentPkgs = dirPkg ++ filePkgs;
+      filePkgs = forFilter (lsFiles path) (
+        fname:
+        if
+          hasSuffix ".nix" fname && fname != "scope.nix" && fname != "default.nix" && fname != "package.nix"
+        then
+          {
+            name = concatStringsSep "/" (breadcrumbs ++ [ (lib.removeSuffix ".nix" fname) ]);
+            value = nextScope.callPackage (path + "/${fname}") nextArgs;
+          }
+        else
+          null
+      );
 
       # 3. Recurse
-      childrenPkgs = concatMap (evalScopedTree context nextScope nextArgs) node.children;
+      # Stop recursion if this directory is a package itself (Encapsulation)
+      childrenPkgs =
+        if hasPackage then
+          [ ]
+        else
+          concatMap (d: loadScopedTree context nextScope nextArgs (path + "/${d}") (breadcrumbs ++ [ d ])) (
+            lsDirs path
+          );
     in
-    currentPkgs ++ childrenPkgs;
+    dirPkg ++ filePkgs ++ childrenPkgs;
 
   # ================================================================
   # Configuration Schema
@@ -610,8 +573,8 @@ let
         };
       });
 
-      # collectFromRoots :: [String] -> SystemContext -> [PackageNode]
-      collectFromRoots =
+      # loadScopedOutputs :: [String] -> SystemContext -> [ { name :: String; value :: Any; } ]
+      loadScopedOutputs =
         subdirsList: sysContext:
         builtins.concatMap (
           root:
@@ -625,11 +588,7 @@ let
             );
           in
           builtins.concatMap (
-            pkgRoot:
-            evalScopedTree sysContext sysContext.scope { } (mkScopedTreeNode {
-              path = pkgRoot;
-              breadcrumbs = [ ];
-            })
+            pkgRoot: loadScopedTree sysContext sysContext.scope { } pkgRoot [ ]
           ) validSubdirs
         ) roots;
     in
@@ -647,7 +606,7 @@ let
       #  templates/   # top-level subdirs marked by templates.nix
 
       packages = eachSystem (
-        sysContext: listToAttrs (collectFromRoots layout.packages.subdirs sysContext)
+        sysContext: listToAttrs (loadScopedOutputs layout.packages.subdirs sysContext)
       );
 
       apps = eachSystem (
@@ -655,7 +614,7 @@ let
         let
           inherit (flakeFhsLib.more sysContext.pkgs) inferMainProgram;
           # 1. Collect all packages from 'apps' directories
-          rawApps = collectFromRoots layout.apps.subdirs sysContext;
+          rawApps = loadScopedOutputs layout.apps.subdirs sysContext;
         in
         listToAttrs (
           map (app: {
@@ -753,7 +712,7 @@ let
         ) validHosts
       );
 
-      checks = eachSystem (sysContext: listToAttrs (collectFromRoots layout.checks.subdirs sysContext));
+      checks = eachSystem (sysContext: listToAttrs (loadScopedOutputs layout.checks.subdirs sysContext));
 
       lib = prepareLib {
         inherit roots lib;
