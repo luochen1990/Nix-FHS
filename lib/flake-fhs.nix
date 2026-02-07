@@ -29,10 +29,10 @@ let
     concatFor
     lsDirs
     lsFiles
-    findSubDirsContains
     exploreDir
     hasSuffix
     isEmptyFile
+    inferMainProgram
     ;
 
   # ================================================================
@@ -629,7 +629,6 @@ let
       apps = eachSystem (
         sysContext:
         let
-          inherit (flakeFhsLib.more sysContext.pkgs) inferMainProgram;
           # 1. Collect all packages from 'apps' directories
           rawApps = loadScopedOutputs layout.apps.subdirs sysContext;
         in

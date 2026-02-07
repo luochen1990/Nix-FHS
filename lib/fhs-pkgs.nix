@@ -1,12 +1,5 @@
 # © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
-#
-# Package-related utility functions
 {
-  lib,
-  ...
-}:
-rec {
-
   # Infer the main program name from a package derivation
   # This mimics the behavior in nixpkgs where mainProgram defaults to pname
   # or the name without version suffix

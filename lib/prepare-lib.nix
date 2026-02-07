@@ -66,7 +66,7 @@ in
         in
         unionFor (levels.lv1 or [ ]) (x: import x.path arg1);
 
-      arg1' = lv1 // lv0 // lib; # TODO: 命名冲突不覆盖，而是直接报错
+      arg1' = lv1 // lv0 // lib; # NOTE: check function ARGUMENTS of lib/*.nix if `infinite recursion encountered`
       ret1 = lv1 // lv0;
 
       # 返回（依赖pkgs的）自定义函数集合，但每个自定义函数都可从 lib 参数中访问全量工具函数
