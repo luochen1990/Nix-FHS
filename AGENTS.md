@@ -65,8 +65,6 @@ The framework uses `callPackage` to build packages. You can customize the `callP
   - `lib/list.nix`: List operations
   - `lib/file.nix`: File system operations
   - `lib/flake-fhs.nix`: Core `mkFlake` implementation
-  - `lib/more/`: Extended utilities requiring `pkgs`
-    - `lib/more/package.nix`: Package helpers (e.g. `inferMainProgram`)
 
  - **templates/**: Project templates for different use cases
    - `std`: Standard template with complete nixos-config and flake outputs 1:1 naming
