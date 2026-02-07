@@ -1,5 +1,6 @@
 # © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
-{
+# :: Context -> Tools
+lib: rec {
   # Infer the main program name from a package derivation
   # This mimics the behavior in nixpkgs where mainProgram defaults to pname
   # or the name without version suffix
@@ -24,4 +25,36 @@
         # Fallback: just return the name as-is
         pkg.name;
 
+  # callPackage with custom warnings for deprecated patterns
+  #
+  # :: Scope -> (Path | Function) -> Attrs -> Derivation
+  callPackageWithWarning =
+    scope: target: args:
+    let
+      # Check for 'system' argument in the function
+      fn = if builtins.isPath target || builtins.isString target then import target else target;
+      requestsSystem = builtins.isFunction fn && (builtins.functionArgs fn) ? system;
+      systemProvided = args ? system;
+
+      pathStr =
+        if builtins.isPath target || builtins.isString target then toString target else "<unknown>";
+      msg = "Warning: File '${pathStr}' requests 'system' argument which may trigger a Nixpkgs warning. Use 'pkgs.stdenv.hostPlatform.system' instead.";
+    in
+    if requestsSystem && !systemProvided then
+      builtins.trace msg (lib.callPackageWith scope target args)
+    else
+      lib.callPackageWith scope target args;
+
+  # Create a scope (package set) with callPackage
+  #
+  # :: Scope -> Scope
+  mkScope =
+    scope:
+    let
+      _ = if builtins.isFunction scope then builtins.trace "ERROR: scope is a function!" scope else null;
+    in
+    scope
+    // {
+      callPackage = callPackageWithWarning scope;
+    };
 }

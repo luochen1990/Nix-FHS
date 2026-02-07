@@ -16,6 +16,7 @@ let
     hasSuffix
     forFilter
     removeSuffix
+    callPackageWithWarning
     ;
 
   # ================================================================
@@ -46,7 +47,7 @@ let
           [
             {
               name = concatStringsSep "/" breadcrumbs;
-              value = nextScope.callPackage pkgPath nextArgs;
+              value = callPackageWithWarning nextScope pkgPath nextArgs;
             }
           ]
         else
@@ -64,7 +65,7 @@ let
             then
               {
                 name = concatStringsSep "/" (breadcrumbs ++ [ (removeSuffix ".nix" fname) ]);
-                value = nextScope.callPackage (path + "/${fname}") nextArgs;
+                value = callPackageWithWarning nextScope (path + "/${fname}") nextArgs;
               }
             else
               null

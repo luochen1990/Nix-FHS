@@ -61,7 +61,7 @@ let
               };
 
             evaluated = lib.nixosSystem {
-              system = hive.meta.nodeNixpkgs.${name}.system;
+              system = hive.meta.nodeNixpkgs.${name}.stdenv.hostPlatform.system;
               pkgs = hive.meta.nodeNixpkgs.${name};
               specialArgs = hive.meta.nodeSpecialArgs.${name};
               modules = [
