@@ -40,7 +40,6 @@ let
         supportedSystems
         nixpkgsConfig
         optionsMode
-        colmena
         layout
         systemContext
         ;
@@ -145,19 +144,6 @@ let
           networking.hostName = lib.mkDefault hostname;
         };
 
-      # This module makes colmena & nixosConfigurations produce exactly the same toplevel outPath
-      colmenaShimModule = {
-        # Fix VersionName diff between colmena & nixosConfigurations
-        system.nixos.revision = nixpkgs.rev or nixpkgs.dirtyRev or null;
-        system.nixos.versionSuffix =
-          if nixpkgs ? lastModifiedDate && nixpkgs ? shortRev then
-            ".${builtins.substring 0 8 nixpkgs.lastModifiedDate}.${nixpkgs.shortRev}"
-          else
-            "";
-        # Fix NIX_PATH diff between colmena & nixosConfigurations
-        nixpkgs.flake.source = nixpkgs.outPath;
-      };
-
       # Discover hosts
       validHosts = exploreDir roots (it: rec {
         configuration-dot-nix = it.path + "/configuration.nix";
@@ -214,92 +200,6 @@ let
         )
       );
 
-      devShells = eachSystem (
-        sysContext:
-        listToAttrs (
-          concatLists (
-            exploreDir roots (it: rec {
-              isShellsRoot = it.depth == 0 && partOf.devShells it.name;
-              isShellsSubDir = it.depth >= 1;
-
-              into = isShellsRoot || isShellsSubDir;
-
-              out =
-                if isShellsRoot then
-                  # Case 1: shells/*.nix -> devShells.*
-                  forFilter (lsFiles it.path) (
-                    fname:
-                    if hasSuffix ".nix" fname then
-                      {
-                        name = flakeFhsLib.removeSuffix ".nix" fname;
-                        value = import (it.path + "/${fname}") sysContext;
-                      }
-                    else
-                      null
-                  )
-                else if isShellsSubDir && pathExists (it.path + "/default.nix") then
-                  # Case 2: shells/<name>/default.nix -> devShells.<name>
-                  [
-                    {
-                      name = concatStringsSep "/" (tail it.breadcrumbs');
-                      value = import (it.path + "/default.nix") sysContext;
-                    }
-                  ]
-                else
-                  [ ];
-
-              pick = out != [ ];
-            })
-          )
-        )
-      );
-
-      nixosModules =
-        listToAttrs (
-          concatFor moduleTree.guardedChildrenNodes (it: [
-            {
-              name = (concatStringsSep "." it.modPath) + ".options";
-              value = flakeFhsLib.mkOptionsModule args it;
-            }
-            {
-              name = (concatStringsSep "." it.modPath) + ".config";
-              value = flakeFhsLib.mkDefaultModule args it;
-            }
-          ])
-        )
-        // {
-          default = {
-            imports = moduleTree.unguardedConfigPaths;
-          };
-        };
-
-      nixosConfigurations = listToAttrs (
-        map (
-          host:
-          let
-            sysContext = mkSysContext host.info.system;
-            modules = sharedModules ++ [
-              (host.path + "/configuration.nix")
-            ];
-          in
-          {
-            name = host.name;
-            value = lib.nixosSystem {
-              inherit (sysContext)
-                system
-                lib
-                ;
-              specialArgs = sysContext.specialArgs // {
-                hostname = host.name;
-              };
-              modules = modules ++ [
-                { nixpkgs.pkgs = sysContext.pkgs; }
-              ];
-            };
-          }
-        ) validHosts
-      );
-
       checks = eachSystem (
         sysContext: listToAttrs (flakeFhsLib.loadScopedOutputs args roots layout.checks.subdirs sysContext)
       );
@@ -308,106 +208,25 @@ let
         inherit roots lib;
         libSubdirs = layout.lib.subdirs;
       };
-
-      templates =
-        let
-          readTemplatesFromRoot =
-            root:
-            let
-              templatePath = root + "/templates";
-            in
-            if pathExists templatePath then
-              for (lsDirs templatePath) (
-                name:
-                let
-                  fullPath = templatePath + "/${name}";
-                  flakePath = fullPath + "/flake.nix";
-                  hasFlake = pathExists flakePath;
-                  description =
-                    if hasFlake then (import flakePath).description or "Template: ${name}" else "Template: ${name}";
-                in
-                {
-                  inherit name;
-                  value = {
-                    path = fullPath;
-                    inherit description;
-                  };
-                }
-              )
-            else
-              [ ];
-
-          allTemplateLists = map readTemplatesFromRoot roots;
-          allTemplates = concatLists allTemplateLists;
-        in
-        builtins.listToAttrs allTemplates;
-
-      # Formatter
-      formatter = eachSystem (
-        { pkgs, ... }:
-        let
-          treefmtNix = self.outPath + "/treefmt.nix";
-          treefmtToml = self.outPath + "/treefmt.toml";
-        in
-        if pathExists treefmtNix then
-          if (inputs ? treefmt-nix) then
-            (inputs.treefmt-nix.lib.evalModule pkgs treefmtNix).config.build.wrapper
-          else
-            #NOTE: the treefmt.nix format is different here
-            #DOC: https://nixos.org/manual/nixpkgs/stable/#opt-treefmt-settings
-            pkgs.treefmt.withConfig { settings = import treefmtNix; }
-        else if pathExists treefmtToml then
-          pkgs.treefmt.withConfig { configFile = treefmtToml; }
-        else
-          pkgs.treefmt
-      );
     }
-    // (
-      if colmena.enable then
-        {
-          colmenaHive = inputs.colmena.lib.makeHive (
-            {
-              meta = {
-                nixpkgs = (mkSysContext (head supportedSystems)).pkgs;
-                nodeNixpkgs = listToAttrs (
-                  map (host: {
-                    name = host.name;
-                    value = (mkSysContext host.info.system).pkgs;
-                  }) validHosts
-                );
-                nodeSpecialArgs = listToAttrs (
-                  map (
-                    host:
-                    let
-                      sysContext = mkSysContext host.info.system;
-                    in
-                    {
-                      name = host.name;
-                      value = sysContext.specialArgs // {
-                        hostname = host.name;
-                      };
-                    }
-                  ) validHosts
-                );
-              };
-            }
-            // listToAttrs (
-              map (host: {
-                name = host.name;
-                value = {
-                  deployment.allowLocalDeployment = true;
-                  imports = sharedModules ++ [
-                    (host.path + "/configuration.nix")
-                    colmenaShimModule
-                  ];
-                };
-              }) validHosts
-            )
-          );
-        }
-      else
-        { }
-    );
+    // (flakeFhsLib.mkColmenaOutput args {
+      inherit validHosts sharedModules mkSysContext;
+    })
+    // (flakeFhsLib.mkTemplatesOutput args {
+      inherit roots;
+    })
+    // (flakeFhsLib.mkFormatterOutput args {
+      inherit eachSystem;
+    })
+    // (flakeFhsLib.mkModulesOutput args {
+      inherit moduleTree;
+    })
+    // (flakeFhsLib.mkConfigurationsOutput args {
+      inherit validHosts sharedModules mkSysContext;
+    })
+    // (flakeFhsLib.mkShellsOutput args {
+      inherit roots partOf eachSystem;
+    });
 in
 {
   inherit mkFlakeCore;

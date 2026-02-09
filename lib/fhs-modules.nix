@@ -1,6 +1,6 @@
 # © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
 #
-# Flake FHS module system logic
+# Flake FHS module system logic and output generation
 #
 lib:
 let
@@ -13,6 +13,7 @@ let
     concatStringsSep
     pathExists
     removeAttrs
+    listToAttrs
     ;
 
   inherit (lib)
@@ -210,6 +211,34 @@ let
       unguardedConfigPaths = concatFor forest (t: t.unguardedConfigPaths);
     };
 
+  # ================================================================
+  # Output Generation
+  # ================================================================
+
+  mkModulesOutput =
+    args:
+    { moduleTree }:
+    {
+      nixosModules =
+        listToAttrs (
+          concatFor moduleTree.guardedChildrenNodes (it: [
+            {
+              name = (concatStringsSep "." it.modPath) + ".options";
+              value = mkOptionsModule args it;
+            }
+            {
+              name = (concatStringsSep "." it.modPath) + ".config";
+              value = mkDefaultModule args it;
+            }
+          ])
+        )
+        // {
+          default = {
+            imports = moduleTree.unguardedConfigPaths;
+          };
+        };
+    };
+
 in
 {
   inherit
@@ -218,5 +247,6 @@ in
     mkDefaultModule
     mkGuardedTree
     mkGuardedTreeNode
+    mkModulesOutput
     ;
 }

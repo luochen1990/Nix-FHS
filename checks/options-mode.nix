@@ -8,7 +8,7 @@
 let
   # Replicate library setup
   utils' = lib // (import ../lib/list.nix) // (import ../lib/dict.nix) // (import ../lib/file.nix);
-  inherit (import ../lib/prepare-lib.nix utils') prepareLib;
+  inherit (import ../lib/fhs-lib.nix utils') prepareLib;
 
   libWithUtils = utils' // {
     inherit prepareLib;

@@ -62,8 +62,9 @@ The framework uses `callPackage` to build packages. You can customize the `callP
 - **lib/**: Core utility library with Haskell-inspired functional programming patterns
   - `lib/flake-fhs.nix`: Entry point wrapper for `mkFlake`
   - `lib/fhs-core.nix`: Core implementation (`mkFlakeCore`)
-  - `lib/fhs-modules.nix`: Module system logic
+  - `lib/fhs-modules.nix`: Module system logic and output generation
   - `lib/fhs-pkgs.nix`: Package loading logic
+  - `lib/fhs-lib.nix`: Library preparation and recursive loader
   - `lib/fhs-config.nix`: Configuration options
   - `lib/pkg-tools.nix`: Package helper utilities
   - `lib/dict.nix`, `lib/list.nix`, `lib/file.nix`: Fundamental utilities
@@ -197,7 +198,7 @@ The `mkFlake` function has been redesigned to use Nix's module system (`lib.eval
 - **Type Safety**: Leverages Nix's type system extensively
 
 ### File Organization
-- Core logic split across `lib/fhs-*.nix` files (`core`, `modules`, `pkgs`, `config`)
+- Core logic split across `lib/fhs-*.nix` files (`core`, `modules`, `pkgs`, `config`, `lib`)
 - Entry point in `lib/flake-fhs.nix`
 - Shared utilities in `lib/` directory
 - Templates in `templates/` with embedded documentation
