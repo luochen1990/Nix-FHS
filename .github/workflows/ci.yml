@@ -27,7 +27,7 @@ jobs:
           mnt-safe-haven: '2048'     # Reserve 2GB on /mnt
 
       - name: Install Nix
-        uses: determinateSystems/nix-installer-action@v9
+        uses: determinateSystems/nix-installer-action@v14
 
       - name: Setup Cachix
         uses: cachix/cachix-action@v14
