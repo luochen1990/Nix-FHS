@@ -33,8 +33,7 @@
 # - 虚拟 default.nix 会递归收集该目录下:
 #   - 所有 unguarded 的 `.nix` 文件
 #   - 所有有 `default.nix` 的子目录（引入其 default.nix）
-# - 但是，如果父目录（或任何祖先）有自己的 `default.nix`，则虚拟 default.nix 为空
-#   - 因为父目录的 default.nix 会负责引入所有子目录的内容
+#   - 跳过所有 guarded module 子目录（由它们自己的虚拟 default.nix 处理）
 #
 # ### 2.3 设计意图
 # 这个设计允许用户选择两种组织方式:
@@ -78,41 +77,30 @@
 #
 # `importUnguardedFiles` 与 `findFilesRec` 的关键区别:
 # - `findFilesRec` 会递归穿透所有子目录，可能导致重复引入
-# - `importUnguardedFiles` 与 `parentHasDefault` 机制配合:
-#   - 遇到有 default.nix 的目录时引入它（让 default.nix 控制引入）
-#   - 遇到没有 default.nix 的 guarded module 时，递归处理它的内容
-#     （因为 parentHasDefault=true 时，flake-fhs 不会为它生成虚拟 default.nix）
+# - `importUnguardedFiles` 尊重 guarded module 边界:
+#   - 遇到 guarded module 时跳过（由 flake-fhs 的虚拟 default.nix 处理）
+#   - 遇到有 default.nix 的目录时引入它
 #   - 其他目录递归处理
 #
-# ## 4. parentHasDefault 传递机制
+# ## 4. 文件引入责任划分
 #
-# 当使用 `importUnguardedFiles` 时，系统通过 `parentHasDefault` 参数跟踪祖先状态，
-# 确保子 guarded module 的虚拟 default.nix 不会重复引入文件:
+# 通过以上设计，文件引入的责任被清晰划分:
 #
 # ```
 # bedrock/                     # 有 options.nix (guarded) + default.nix
 # ├── options.nix
 # ├── default.nix              # 使用 importUnguardedFiles ".mod.nix"
-# ├── prelude.mod.nix          # 由 default.nix 引入
+# ├── prelude.mod.nix          # 由 bedrock/default.nix 引入
 # └── network/                 # 有 options.nix (guarded)，无 default.nix
 #     ├── options.nix          # 跳过（不引入 options.nix）
-#     ├── core.mod.nix         # 由 bedrock/default.nix 递归引入
+#     ├── core.mod.nix         # 由 network/ 的虚拟 default.nix 引入
 #     └── adguard/
-#         └── service.mod.nix  # 由 bedrock/default.nix 递归引入
+#         └── service.mod.nix  # 由 network/ 的虚拟 default.nix 引入
 # ```
 #
-# 在这个例子中:
-# - `bedrock/default.nix` 使用 `importUnguardedFiles` 收集 `.mod.nix` 文件
-# - `network/` 是 guarded module，没有 default.nix
-# - `importUnguardedFiles` 会递归进入 `network/`，收集 `core.mod.nix` 和 `adguard/service.mod.nix`
-# - `bedrock/network/` 的虚拟 default.nix 为空（因为 parentHasDefault=true）
-# - 结果：每个文件只被引入一次
-#
-# 在这个例子中:
-# - `bedrock/default.nix` 使用 `importUnguardedFiles` 收集 `.mod.nix` 文件
-# - `network/` 是 guarded module，`importUnguardedFiles` 会跳过它（不穿透）
-# - `bedrock/network/` 的虚拟 default.nix 为空（因为 parentHasDefault=true）
-# - `adguard/service.mod.nix` 只被引入一次
+# - `bedrock/default.nix` 只负责 `bedrock/` 目录下的 unguarded 文件
+# - `network/` 是 guarded module，由 flake-fhs 的虚拟 default.nix 负责引入其内容
+# - 结果：每个文件只被引入一次，责任边界清晰
 #
 # ## 5. 输出结构
 #
@@ -267,9 +255,7 @@ let
   # 
   # 引入来源:
   # 1. 如果有 default.nix，则引入它
-  # 2. 引入 unguardedConfigPaths（由 mkGuardedTreeNode 收集）
-  #    - 如果 parentHasDefault=false 且 hasDefault=false，则包含虚拟 default.nix 的内容
-  #    - 否则为空（由祖先或自己的 default.nix 处理）
+  # 2. 否则引入 unguardedConfigPaths（虚拟 default.nix 的内容）
   #
   mkDefaultModule = config: it: 
     let
@@ -284,32 +270,24 @@ let
   # Tree Traversal (Guarded)
   # ================================================================
 
-  # mkGuardedTreeNode : { modPath, path, parentHasDefault } -> GuardedTreeNode
+  # mkGuardedTreeNode : { modPath, path } -> GuardedTreeNode
   # 
   # GuardedTreeNode 表示一个有 options.nix 的 guarded module
   # 
-  # default.nix 处理逻辑:
-  # - 如果 guarded module 有 default.nix, 则使用它
-  # - 如果 guarded module 没有 default.nix, 则创建一个虚拟的 default.nix
-  #   - 虚拟 default.nix 会递归引入该目录下所有 unguarded 的 .nix 文件
-  #   - 但是, 如果父目录(或任何祖先)有 default.nix, 则虚拟 default.nix 为空
-  #     (因为父目录的 default.nix 会负责引入所有子目录的内容)
+  # 虚拟 default.nix 逻辑:
+  # - 如果目录没有 default.nix，unguardedConfigPaths 会收集:
+  #   - 所有 unguarded 的 .nix 文件
+  #   - 所有有 default.nix 的子目录
+  #   - 跳过所有 guarded module 子目录（由它们自己的虚拟 default.nix 处理）
   #
   mkGuardedTreeNode =
     {
       modPath,
       path,
-      parentHasDefault ? false,
     }:
     let
-      # Check if this directory has a default.nix
       default-dot-nix = path + "/default.nix";
       hasDefault = pathExists default-dot-nix;
-      
-      # 如果父目录有 default.nix, 则不需要收集任何 unguarded 文件
-      # 因为父目录的 default.nix 会负责引入所有内容
-      # 如果当前目录有 default.nix, 也不需要收集, 因为会直接使用 default.nix
-      needCollectUnguarded = !parentHasDefault && !hasDefault;
       
       unguardedConfigPaths = concatLists (
         exploreDir [ path ] (it: rec {
@@ -317,11 +295,10 @@ let
           default-dot-nix = it.path + "/default.nix";
           guarded = pathExists options-dot-nix;
           defaulted = pathExists default-dot-nix;
-          # 只有当需要收集时, 才进入子目录
           # 进入非-guarded 且非-defaulted 的目录
-          into = needCollectUnguarded && !(guarded || defaulted);
-          # 收集非-guarded 的目录(当需要收集时)
-          pick = !guarded && needCollectUnguarded;
+          into = !(guarded || defaulted);
+          # 收集非-guarded 的目录
+          pick = !guarded;
           out =
             if defaulted then
               [ default-dot-nix ]
@@ -340,8 +317,6 @@ let
         out = mkGuardedTreeNode {
           modPath = it.breadcrumbs';
           path = it.path;
-          # 传递给子 guarded module: 如果当前目录或任何祖先有 default.nix
-          parentHasDefault = hasDefault || parentHasDefault;
         };
       });
     in
@@ -362,7 +337,6 @@ let
         mkGuardedTreeNode {
           inherit path;
           modPath = [ ];
-          parentHasDefault = false;
         }
       ) rootModulePaths;
     in
