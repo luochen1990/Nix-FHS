@@ -253,17 +253,20 @@ let
   # 
   # 为 guarded module 生成配置模块 (.config)
   # 
-  # 引入来源:
-  # 1. 如果有 default.nix，则引入它
+  # 引入来源（互斥）:
+  # 1. 如果有 default.nix，则只引入它（default.nix 负责导入其 unguarded 子内容）
   # 2. 否则引入 unguardedConfigPaths（虚拟 default.nix 的内容）
   #
   mkDefaultModule = config: it: 
     let
       default-dot-nix = it.path + "/default.nix";
       hasDefault = pathExists default-dot-nix;
-      defaultImport = if hasDefault then [ default-dot-nix ] else [];
     in {
-      imports = defaultImport ++ map (warpModule config it.modPath) it.unguardedConfigPaths;
+      imports = 
+        if hasDefault then 
+          [ default-dot-nix ]
+        else 
+          map (warpModule config it.modPath) it.unguardedConfigPaths;
     };
 
   # ================================================================
