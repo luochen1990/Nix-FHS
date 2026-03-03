@@ -164,7 +164,9 @@ let
           guarded = pathExists options-dot-nix;
           defaulted = pathExists default-dot-nix;
           into = !(guarded || defaulted);
-          pick = !guarded || defaulted;
+          # Only pick if not guarded (guarded directories will be handled by guardedChildrenNodes)
+          # If defaulted but not guarded, pick the default.nix
+          pick = defaulted && !guarded;
           out =
             if defaulted then
               [ default-dot-nix ]
