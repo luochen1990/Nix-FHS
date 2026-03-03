@@ -164,7 +164,7 @@ let
           guarded = pathExists options-dot-nix;
           defaulted = pathExists default-dot-nix;
           into = !(guarded || defaulted);
-          pick = !guarded;
+          pick = !guarded || defaulted;
           out =
             if defaulted then
               [ default-dot-nix ]
