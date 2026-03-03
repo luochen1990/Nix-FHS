@@ -2,6 +2,97 @@
 #
 # Flake FHS module system logic and output generation
 #
+# ================================================================
+# 设计文档: 模块系统
+# ================================================================
+#
+# ## 1. 核心概念
+#
+# ### 1.1 Guarded Module (受保护模块)
+# - 一个目录如果包含 `options.nix` 文件，就被称为 "guarded module"
+# - `options.nix` 定义该模块的选项（options）
+# - 每个 guarded module 会被展开为两个独立的 nixosModules:
+#   - `<modPath>.options` - 仅引入 options.nix
+#   - `<modPath>.config` - 引入配置实现
+#
+# ### 1.2 Unguarded Directory (非受保护目录)
+# - 没有 `options.nix` 的目录
+# - 其中的 `.nix` 文件会被直接收集
+#
+# ## 2. default.nix 处理逻辑
+#
+# default.nix 用于显式控制模块的引入方式，与 options.nix 是独立的机制。
+#
+# ### 2.1 有 default.nix 的情况
+# - 如果 guarded module 目录有 `default.nix`，则 `.config` 模块直接使用它
+# - `default.nix` 负责引入该模块的所有配置实现
+# - 注意: `default.nix` 不应该引入 `options.nix`（会通过 `.options` 模块单独引入）
+#
+# ### 2.2 没有 default.nix 的情况 (虚拟 default.nix)
+# - 如果 guarded module 目录没有 `default.nix`，系统会创建一个"虚拟 default.nix"
+# - 虚拟 default.nix 会递归收集该目录下:
+#   - 所有 unguarded 的 `.nix` 文件
+#   - 所有有 `default.nix` 的子目录（引入其 default.nix）
+# - 但是，如果父目录（或任何祖先）有自己的 `default.nix`，则虚拟 default.nix 为空
+#   - 因为父目录的 default.nix 会负责引入所有子目录的内容
+#
+# ### 2.3 设计意图
+# 这个设计允许用户选择两种组织方式:
+#
+# 方式 A: 手动控制（使用 default.nix）
+# ```
+# modules/
+# └── myapp/
+#     ├── options.nix      # 标记为 guarded module
+#     └── default.nix      # 显式控制引入哪些文件
+# ```
+# - default.nix 内容示例:
+#   ```nix
+#   { ... }: {
+#     imports = [ ./config.nix ./services ];
+#   }
+#   ```
+#
+# 方式 B: 自动发现（无 default.nix）
+# ```
+# modules/
+# └── myapp/
+#     ├── options.nix      # 标记为 guarded module
+#     ├── feature1.nix     # 自动被发现
+#     ├── feature2.nix     # 自动被发现
+#     └── sub/
+#         └── feature3.nix # 自动被发现
+# ```
+# - 系统会自动创建虚拟 default.nix 引入所有 .nix 文件
+#
+# ## 3. parentHasDefault 传递机制
+#
+# 为了避免重复引入，使用 `parentHasDefault` 参数跟踪祖先状态:
+#
+# ```
+# bedrock/                     # 有 options.nix (guarded) + default.nix
+# ├── options.nix
+# ├── default.nix              # 引入所有 .mod.nix 文件
+# ├── prelude.mod.nix          # 由 default.nix 引入
+# └── network/                 # 有 options.nix (guarded)，无 default.nix
+#     ├── options.nix
+#     └── adguard/
+#         └── service.mod.nix  # 由 bedrock/default.nix 引入
+# ```
+#
+# 在这个例子中:
+# - `bedrock/` 有 `default.nix`，所以 `bedrock.config` 使用它
+# - `bedrock/network/` 是子 guarded module，它的 `parentHasDefault = true`
+# - 因此 `bedrock/network/` 的虚拟 default.nix 为空（不收集任何文件）
+# - `adguard/service.mod.nix` 只被 `bedrock/default.nix` 引入一次
+#
+# ## 4. 输出结构
+#
+# 对于每个 guarded module，生成:
+# - `nixosModules.<modPath>.options` - 选项声明
+# - `nixosModules.<modPath>.config` - 配置实现
+# - `nixosModules.default` - 引入所有模块的默认入口
+#
 lib:
 let
   inherit (builtins)
@@ -143,6 +234,15 @@ let
     };
 
   # mkDefaultModule : Config -> GuardedTreeNode -> Module
+  # 
+  # 为 guarded module 生成配置模块 (.config)
+  # 
+  # 引入来源:
+  # 1. 如果有 default.nix，则引入它
+  # 2. 引入 unguardedConfigPaths（由 mkGuardedTreeNode 收集）
+  #    - 如果 parentHasDefault=false 且 hasDefault=false，则包含虚拟 default.nix 的内容
+  #    - 否则为空（由祖先或自己的 default.nix 处理）
+  #
   mkDefaultModule = config: it: 
     let
       default-dot-nix = it.path + "/default.nix";
