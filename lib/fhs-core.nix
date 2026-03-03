@@ -126,10 +126,15 @@ let
         )
       );
 
+      # Recursively collect all guarded nodes from the tree
+      collectAllGuardedNodes = tree:
+        tree.guardedChildrenNodes
+        ++ concatFor tree.guardedChildrenNodes (it: collectAllGuardedNodes it);
+
       # Shared modules for both NixOS configurations and Colmena
       sharedModules =
         moduleTree.unguardedConfigPaths
-        ++ concatFor moduleTree.guardedChildrenNodes (it: [
+        ++ concatFor (collectAllGuardedNodes moduleTree) (it: [
           (flakeFhsLib.mkOptionsModule args it)
           (flakeFhsLib.mkDefaultModule args it)
         ])

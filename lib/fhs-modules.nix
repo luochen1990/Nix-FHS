@@ -215,13 +215,21 @@ let
   # Output Generation
   # ================================================================
 
+  # Recursively collect all guarded nodes from the tree
+  collectAllGuardedNodes = tree:
+    tree.guardedChildrenNodes
+    ++ concatFor tree.guardedChildrenNodes (it: collectAllGuardedNodes it);
+
   mkModulesOutput =
     args:
     { moduleTree }:
+    let
+      allGuardedNodes = collectAllGuardedNodes moduleTree;
+    in
     {
       nixosModules =
         listToAttrs (
-          concatFor moduleTree.guardedChildrenNodes (it: [
+          concatFor allGuardedNodes (it: [
             {
               name = (concatStringsSep "." it.modPath) + ".options";
               value = mkOptionsModule args it;
@@ -236,7 +244,7 @@ let
           default = {
             imports =
               moduleTree.unguardedConfigPaths
-              ++ concatFor moduleTree.guardedChildrenNodes (it: [
+              ++ concatFor allGuardedNodes (it: [
                 (mkOptionsModule args it)
                 (mkDefaultModule args it)
               ]);
