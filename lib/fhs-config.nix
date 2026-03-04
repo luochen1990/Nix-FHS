@@ -34,7 +34,6 @@ let
                 type = lib.types.listOf lib.types.str;
                 default = [
                   ""
-                  "/nix"
                 ];
                 description = "Roots directories";
               };
@@ -68,7 +67,6 @@ let
                 type = lib.types.listOf lib.types.str;
                 default = [
                   "hosts"
-                  "profiles"
                   "nixosConfigurations"
                 ];
                 description = "NixOS configurations directories";
@@ -93,8 +91,6 @@ let
                 type = lib.types.listOf lib.types.str;
                 default = [
                   "lib"
-                  "tools"
-                  "utils"
                 ];
                 description = "Lib directories";
               };
