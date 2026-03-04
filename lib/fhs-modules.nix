@@ -583,8 +583,9 @@ let
       moduleInfos = collectModules modulesDir suffix;
 
       # 生成独立模块输出
+      # 使用 "/" 作为路径分隔符，避免与 Nix 属性路径的点号混淆
       modules = map (info: {
-        name = concatStringsSep "." info.modPath;
+        name = concatStringsSep "/" info.modPath;
         value = wrapModule guardedTree info;
       }) moduleInfos;
 

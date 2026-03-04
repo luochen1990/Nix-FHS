@@ -85,7 +85,7 @@ class TemplateValidator:
             result = self._run_nix(["eval", ".#apps", "--json"], cwd=temp_dir)
             if result.returncode == 0:
                 return TestResult("apps_eval", True, "apps evaluation passed")
-            
+
             error_msg = result.stderr.strip()
             # Truncate error message if too long
             if len(error_msg) > 500:
@@ -93,6 +93,38 @@ class TemplateValidator:
             return TestResult("apps_eval", False, f"apps evaluation failed: {error_msg}")
         except Exception as e:
             return TestResult("apps_eval", False, f"Error running apps evaluation: {e}")
+
+    def _check_nixos_modules(self, temp_dir: Path, template_name: str) -> Optional[TestResult]:
+        """Check nixosModules contains expected nested modules (only for 'std' template)."""
+        if template_name != "std":
+            return None
+
+        try:
+            result = self._run_nix(["flake", "show", "--json"], cwd=temp_dir)
+            if result.returncode != 0:
+                return TestResult("nixos_modules", False, f"nix flake show failed: {result.stderr.strip()}")
+
+            output = json.loads(result.stdout)
+            nixos_modules = output.get("nixosModules", {})
+
+            if not nixos_modules:
+                return TestResult("nixos_modules", False, "No nixosModules found in flake output")
+
+            # Check for nested guarded module "services/web-server"
+            # The module is exported with "/" as path separator
+            expected_module = "services/web-server"
+            found = expected_module in nixos_modules
+
+            if found:
+                return TestResult("nixos_modules", True, f"Found module '{expected_module}'")
+            else:
+                available = list(nixos_modules.keys())
+                return TestResult(
+                    "nixos_modules", False,
+                    f"Module '{expected_module}' not found. Available: {available}"
+                )
+        except Exception as e:
+            return TestResult("nixos_modules", False, f"Error checking nixosModules: {e}")
 
     def _create_temp_template(self, template_path: Path, temp_dir: Path) -> TestResult:
         """Create temporary template with local FlakeFHS."""
@@ -150,6 +182,10 @@ class TemplateValidator:
             if temp_result.passed:
                 results.append(self._check_flake(temp_dir))
                 results.append(self._check_apps_eval(temp_dir))
+                # Check nixosModules for nested guarded modules (std template only)
+                modules_result = self._check_nixos_modules(temp_dir, template_name)
+                if modules_result:
+                    results.append(modules_result)
 
         finally:
             # Cleanup
