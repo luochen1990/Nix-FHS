@@ -104,5 +104,5 @@ pkgs.runCommand "check-flake-option" { } ''
     exit 1
   fi
 
-  echo "PASS" > $out
+  touch $out
 ''

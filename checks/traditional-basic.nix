@@ -39,16 +39,20 @@ let
         type = lib.types.str;
         default = "default-value";
       };
+      options.configs.setting2 = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+      };
       config.configs.setting2 = "always-set";
     }
     EOF
   '';
 
   # Build guarded tree
-  guardedTree = fhs-modules.mkGuardedTree (testSource + "/modules");
+  guardedTree = fhs-modules.mkGuardedTree (testSource + "/modules") ".nix";
 
   # Collect modules
-  moduleInfos = fhs-modules.collectModules (testSource + "/modules");
+  moduleInfos = fhs-modules.collectModules (testSource + "/modules") ".nix";
 
   # Find traditional module
   configsInfo = lib.findFirst (m: m.moduleType == "traditional") null moduleInfos;
@@ -66,61 +70,67 @@ let
     # Test 1: Verify module type
     testModuleType =
       if configsInfo.moduleType != "traditional" then
-        throw "Expected moduleType 'traditional', got '${configsInfo.moduleType}'"
+        "FAIL: Expected moduleType 'traditional', got '${configsInfo.moduleType}'"
       else
-        true;
+        "PASS: Module type is traditional";
 
     # Test 2: Verify modPath
     testModPath =
       if builtins.concatStringsSep "." configsInfo.modPath != "configs" then
-        throw "Expected modPath 'configs', got '${builtins.concatStringsSep "." configsInfo.modPath}'"
+        "FAIL: Expected modPath 'configs', got '${builtins.concatStringsSep "." configsInfo.modPath}'"
       else
-        true;
+        "PASS: modPath is correct";
 
     # Test 3: Verify config is always applied (no enable mechanism)
     testConfigAlwaysApplied =
       if evalResult.config.configs.setting2 != "always-set" then
-        throw "Traditional module config should always be applied"
+        "FAIL: Traditional module config should always be applied"
       else
-        true;
+        "PASS: Config applied without enable mechanism";
 
     # Test 4: Verify no enable option is generated
     testNoEnableOption =
       if builtins.hasAttr "enable" evalResult.options.configs then
-        throw "Traditional module should NOT have auto-generated enable option"
+        "FAIL: Traditional module should NOT have auto-generated enable option"
       else
-        true;
+        "PASS: No auto-generated enable option";
 
     # Test 5: Verify user-defined options work
     testUserOptions =
       if evalResult.config.configs.setting1 != "default-value" then
-        throw "User-defined option should work"
+        "FAIL: User-defined option should work"
       else
-        true;
+        "PASS: User-defined options work correctly";
   };
 
 in
 pkgs.runCommand "check-traditional-basic" { } ''
   echo "=== Test 1: Verify module type ==="
-  echo "PASS: Module type is traditional"
+  echo "${checks.testModuleType}"
 
   echo ""
   echo "=== Test 2: Verify modPath ==="
-  echo "PASS: modPath is correct"
+  echo "${checks.testModPath}"
 
   echo ""
   echo "=== Test 3: Verify config is always applied ==="
-  echo "PASS: Config applied without enable mechanism"
+  echo "${checks.testConfigAlwaysApplied}"
 
   echo ""
   echo "=== Test 4: Verify no enable option is generated ==="
-  echo "PASS: No auto-generated enable option"
+  echo "${checks.testNoEnableOption}"
 
   echo ""
   echo "=== Test 5: Verify user-defined options work ==="
-  echo "PASS: User-defined options work correctly"
+  echo "${checks.testUserOptions}"
 
   echo ""
+  # Fail if any check failed
+  if echo '${builtins.toJSON checks}' | grep -q FAIL; then
+    echo "=== Some tests FAILED ==="
+    exit 1
+  fi
+
   echo "=== All tests passed ==="
-  echo "PASS" > $out
+  touch $out
 ''

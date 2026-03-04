@@ -114,5 +114,5 @@ pkgs.runCommand "check-toplevel-consistency" { } ''
     exit 1
   fi
 
-  echo "PASS" > $out
+  touch $out
 ''

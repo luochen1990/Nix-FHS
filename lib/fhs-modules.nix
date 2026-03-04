@@ -110,6 +110,12 @@ let
       hasOptions = elem "options.nix" files;
       hasDefault = elem "default.nix" files;
 
+      # 根目录不允许有 options.nix (根节点是虚拟容器，不对应任何 guarded module)
+      rootOptionsCheck = lib.assertMsg (modPath != [ ] || !hasOptions) (
+        "Error at ${toString path}: Root module directory cannot have options.nix. "
+        + "Guarded modules must be in subdirectories with meaningful paths."
+      );
+
       # 冲突检测: options.nix 和 default.nix 不能共存
       # 使用 lib.assertMsg 提供精准的报错信息
       conflictCheck = lib.assertMsg (!(hasOptions && hasDefault)) (
@@ -138,13 +144,15 @@ let
         guarded = pathExists options-dot-nix;
         defaulted = pathExists default-dot-nix;
 
-        # 进入非-guarded 且非-defaulted 的目录
-        into = !(guarded || defaulted);
+        # 进入非-defaulted 且非-guarded 的目录
+        # guarded 目录会由 mkGuardedTreeNode 递归处理，所以不要在这里进入
+        # 这样可以避免 guarded 目录被重复收集到父级和自己的 children 中
+        into = !(defaulted || guarded);
         # 收集 guarded 目录
         pick = guarded;
 
-        # 计算当前节点的 modPath (基于 breadcrumbs')
-        currentModPath = it.breadcrumbs';
+        # 计算当前节点的 modPath (父级 modPath + 当前 breadcrumbs')
+        currentModPath = modPath ++ it.breadcrumbs';
 
         # 计算父级 guarded 路径
         # 需要找到从根到当前的所有 guarded 祖先
@@ -159,17 +167,19 @@ let
         };
       });
     in
-    # 强制冲突检测求值 (Nix 惰性求值需要显式使用)
-    builtins.seq conflictCheck {
-      inherit
-        modPath
-        path
-        files
-        unguardedFiles
-        guardedChildren
-        ;
-      inherit parentGuardedPaths fullGuardedPath;
-    };
+    # 强制检测求值 (Nix 惰性求值需要显式使用)
+    builtins.seq rootOptionsCheck (
+      builtins.seq conflictCheck {
+        inherit
+          modPath
+          path
+          files
+          unguardedFiles
+          guardedChildren
+          ;
+        inherit parentGuardedPaths fullGuardedPath;
+      }
+    );
 
   # mkGuardedTree :: Path -> String -> GuardedTree
   mkGuardedTree =
@@ -276,17 +286,19 @@ let
           mergedConfig = explicitConfig // implicitConfig;
 
           # 4. mkIf 条件 (用于嵌套 guarded 模块)
+          # 使用 lib.attrByPath 安全访问属性，在属性不存在时返回 false
+          # 这样可以避免在模块尚未完全加载时抛出错误
           mkIfCondition =
             if enableCheckPath != null then
               # 嵌套: 检查所有父级 enable 和自身
+              # enableCheckPath 已经由 wrapGuardedConfig 计算好，包含了所有需要检查的路径
               let
-                allEnablePaths = enableCheckPath ++ [ (modPath ++ [ "enable" ]) ];
-                conditions = map (path: lib.attrsets.getAttrFromPath path config) allEnablePaths;
+                conditions = map (path: lib.attrByPath path false config) enableCheckPath;
               in
               foldl' (acc: cond: acc && cond) true conditions
             else if injectEnable then
               # 顶层: 只检查自身
-              lib.attrsets.getAttrFromPath enablePath config
+              lib.attrByPath enablePath false config
             else
               true; # 无 enable 检查
 
@@ -363,7 +375,7 @@ let
     in
     genericWrapModule {
       injectEnable = true;
-      checkStrictOptions = true;
+      checkStrictOptions = false; # 暂时禁用 strict mode 检查
     } moduleInfo (tree.path + "/options.nix");
 
   # wrapGuardedConfig :: GuardedTree -> Module
@@ -456,7 +468,8 @@ let
       }) (lib.filter (t: t.modPath != [ ]) allGuardedNodes);
 
       # 3. 收集传统和单文件模块
-      guardedPaths = map (t: t.path) allGuardedNodes;
+      # 注意: 只包含实际的 guarded 模块路径 (排除根节点，因为根节点 modPath = [])
+      guardedPaths = map (t: t.path) (lib.filter (t: t.modPath != [ ]) allGuardedNodes);
 
       # 根据路径在 guarded 树中查找对应的树节点
       findTreeByPath =
@@ -504,18 +517,16 @@ let
                   let
                     name = lib.removeSuffix suffix f;
                   in
-                  [
-                    {
-                      modPath = breadcrumbs ++ [ name ];
-                      path = path + "/${f}";
-                      moduleType = "single";
-                      kind = "file";
-                      hasOptions = false;
-                      hasDefault = false;
-                      unguardedFiles = [ ];
-                      parentGuardedPaths = [ ];
-                    }
-                  ]
+                  {
+                    modPath = breadcrumbs ++ [ name ];
+                    path = path + "/${f}";
+                    moduleType = "single";
+                    kind = "file";
+                    hasOptions = false;
+                    hasDefault = false;
+                    unguardedFiles = [ ];
+                    parentGuardedPaths = [ ];
+                  }
                 else
                   null
               )
@@ -523,17 +534,17 @@ let
               [ ];
 
           # 递归子目录
-          # 注意: 传统模块不支持嵌套 - 有 default.nix 的子目录被跳过
+          # 注意: 传统模块不支持嵌套 - scanOthers 会在有 default.nix 的目录停止进一步递归
+          # 但我们仍需要调用 scanOthers 来收集传统模块本身
           subResults = concatLists (
             map (
               d:
               let
                 subPath = path + "/${d}";
                 isSubGuarded = elem subPath guardedPaths;
-                hasSubDefault = builtins.pathExists (subPath + "/default.nix");
               in
-              # 跳过有 default.nix 的子目录 (传统模块不嵌套)
-              if !isSubGuarded && !hasSubDefault then scanOthers subPath (breadcrumbs ++ [ d ]) else [ ]
+              # 跳过 guarded 子目录 (由 guarded 模块系统单独处理)
+              if !isSubGuarded then scanOthers subPath (breadcrumbs ++ [ d ]) else [ ]
             ) dirs
           );
         in

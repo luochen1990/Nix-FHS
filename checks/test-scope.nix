@@ -63,5 +63,5 @@ pkgs.runCommand "check-scope" { } ''
     exit 1
   fi
 
-  echo "PASS" > $out
+  touch $out
 ''

@@ -36,6 +36,10 @@ let
           type = lib.types.str;
           default = "hello";
         };
+        status = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+        };
       };
     }
     EOF
@@ -43,16 +47,16 @@ let
     cat > $out/modules/myapp/config.nix << 'EOF'
     { config, lib, ... }:
     {
-      config.myapp.result = config.myapp.message;
+      config.myapp.status = "config-applied";
     }
     EOF
   '';
 
   # Build guarded tree
-  guardedTree = fhs-modules.mkGuardedTree (testSource + "/modules");
+  guardedTree = fhs-modules.mkGuardedTree (testSource + "/modules") ".nix";
 
   # Collect modules
-  moduleInfos = fhs-modules.collectModules (testSource + "/modules");
+  moduleInfos = fhs-modules.collectModules (testSource + "/modules") ".nix";
   firstInfo = builtins.head moduleInfos;
 
   # Wrap the module
@@ -76,36 +80,36 @@ let
         child = builtins.head guardedTree.guardedChildren;
       in
       if builtins.concatStringsSep "." child.modPath != "myapp" then
-        throw "Expected modPath 'myapp', got '${builtins.concatStringsSep "." child.modPath}'"
+        "FAIL: Expected modPath 'myapp', got '${builtins.concatStringsSep "." child.modPath}'"
       else
-        true;
+        "PASS: Guarded tree has correct modPath";
 
     # Test 2: Check module info collection
     testModuleCount =
       if builtins.length moduleInfos != 1 then
-        throw "Expected 1 module info, got ${toString (builtins.length moduleInfos)}"
+        "FAIL: Expected 1 module info, got ${toString (builtins.length moduleInfos)}"
       else
-        true;
+        "PASS: Module info collected correctly";
 
     testModuleType =
       if firstInfo.moduleType != "guarded" then
-        throw "Expected moduleType 'guarded', got '${firstInfo.moduleType}'"
+        "FAIL: Expected moduleType 'guarded', got '${firstInfo.moduleType}'"
       else
-        true;
+        "PASS: Module type is guarded";
 
     # Test 3: Check enable option exists
     testEnableExists =
       if !(builtins.hasAttr "enable" evalResult.options.myapp) then
-        throw "Enable option not found in myapp options. Available: ${builtins.concatStringsSep ", " (builtins.attrNames evalResult.options.myapp)}"
+        "FAIL: Enable option not found in myapp options. Available: ${builtins.concatStringsSep ", " (builtins.attrNames evalResult.options.myapp)}"
       else
-        true;
+        "PASS: Enable option exists";
 
     # Test 4: Check config evaluates correctly when enabled
     testConfigResult =
-      if evalResult.config.myapp.result != "hello" then
-        throw "Expected myapp.result = 'hello', got '${toString evalResult.config.myapp.result}'"
+      if evalResult.config.myapp.status != "config-applied" then
+        "FAIL: Expected myapp.status = 'config-applied', got '${toString evalResult.config.myapp.status}'"
       else
-        true;
+        "PASS: Config evaluates correctly";
 
     # Test 5: Check config is NOT applied when disabled
     testDisabledConfig =
@@ -119,34 +123,43 @@ let
           ];
         };
       in
-      if evalDisabled.config.myapp ? result then
-        throw "Config should NOT be applied when disabled, but got result = '${toString evalDisabled.config.myapp.result}'"
+      if evalDisabled.config.myapp.status != "" then
+        "FAIL: Config should NOT be applied when disabled, but got status = '${toString evalDisabled.config.myapp.status}'"
       else
-        true;
+        "PASS: Config correctly guarded";
   };
+
+  checkResults = builtins.attrValues checks;
 
 in
 pkgs.runCommand "check-guarded-basic" { } ''
   echo "=== Test 1: Check guarded tree modPath ==="
-  echo "PASS: Guarded tree has correct modPath"
+  echo "${checks.testTreeModPath}"
 
   echo ""
   echo "=== Test 2: Check module info collection ==="
-  echo "PASS: Module info collected correctly"
+  echo "${checks.testModuleCount}"
+  echo "${checks.testModuleType}"
 
   echo ""
   echo "=== Test 3: Check enable option exists ==="
-  echo "PASS: Enable option exists"
+  echo "${checks.testEnableExists}"
 
   echo ""
   echo "=== Test 4: Check config evaluates correctly when enabled ==="
-  echo "PASS: Config evaluates correctly"
+  echo "${checks.testConfigResult}"
 
   echo ""
   echo "=== Test 5: Check config is NOT applied when disabled ==="
-  echo "PASS: Config correctly guarded"
+  echo "${checks.testDisabledConfig}"
 
   echo ""
+  # Fail if any check failed
+  if echo '${builtins.toJSON checks}' | grep -q FAIL; then
+    echo "=== Some tests FAILED ==="
+    exit 1
+  fi
+
   echo "=== All tests passed ==="
-  echo "PASS" > $out
+  touch $out
 ''

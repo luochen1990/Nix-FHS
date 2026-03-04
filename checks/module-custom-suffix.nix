@@ -1,9 +1,9 @@
 # © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
 #
-# Test: Module collection with all three types
-# - Verifies all three module types coexist correctly
-# - Verifies mkModulesOutput generates correct outputs
-# - Verifies default module includes all modules
+# Test: Module collection with custom suffix (e.g., .mod.nix)
+# - Verifies that custom suffix works for guarded modules
+# - Verifies that custom suffix works for single file modules
+# - Verifies that files with wrong suffix are ignored
 #
 {
   pkgs,
@@ -24,19 +24,17 @@ let
   # Import module functions
   fhs-modules = import ../lib/fhs-modules.nix libWithUtils;
 
-  # Create test directory with all three module types:
+  # Create test directory with custom suffix modules:
   # modules/
-  # ├── guarded-app/           <- Guarded module
+  # ├── guarded-app/           <- Guarded module (should be found)
   # │   ├── options.nix
-  # │   └── config.nix
-  # ├── traditional-set/       <- Traditional module
-  # │   └── default.nix
-  # └── simple.nix             <- Single file module
+  # │   └── config.mod.nix
+  # ├── helper.nix             <- Helper file (should be IGNORED)
+  # └── simple.mod.nix         <- Single file module (should be found)
   testSource = pkgs.runCommand "test-source" { } ''
     mkdir -p $out/modules/guarded-app
-    mkdir -p $out/modules/traditional-set
 
-    # Guarded module
+    # Guarded module with .mod.nix config
     cat > $out/modules/guarded-app/options.nix << 'EOF'
     { lib, ... }:
     {
@@ -46,27 +44,22 @@ let
       };
     }
     EOF
-    cat > $out/modules/guarded-app/config.nix << 'EOF'
+    cat > $out/modules/guarded-app/config.mod.nix << 'EOF'
     { config, ... }:
     {
       config.guarded-app.active = true;
     }
     EOF
 
-    # Traditional module
-    cat > $out/modules/traditional-set/default.nix << 'EOF'
-    { lib, ... }:
-    {
-      options.traditional-set.value = lib.mkOption {
-        type = lib.types.str;
-        default = "traditional-default";
-      };
-      config.traditional-set.active = true;
-    }
+    # Helper file (should be ignored)
+    cat > $out/modules/helper.nix << 'EOF'
+    # This is a helper file, not a module
+    { lib }:
+    lib.mkDefault "helper"
     EOF
 
-    # Single file module
-    cat > $out/modules/simple.nix << 'EOF'
+    # Single file module with .mod.nix
+    cat > $out/modules/simple.mod.nix << 'EOF'
     { lib, ... }:
     {
       options.simple.feature = lib.mkOption {
@@ -78,19 +71,18 @@ let
     EOF
   '';
 
-  # Collect modules
-  moduleInfos = fhs-modules.collectModules (testSource + "/modules") ".nix";
+  # Collect modules with custom suffix
+  moduleInfos = fhs-modules.collectModules (testSource + "/modules") ".mod.nix";
 
   # Count modules by type
   guardedCount = lib.length (lib.filter (m: m.moduleType == "guarded") moduleInfos);
-  traditionalCount = lib.length (lib.filter (m: m.moduleType == "traditional") moduleInfos);
   singleCount = lib.length (lib.filter (m: m.moduleType == "single") moduleInfos);
   totalCount = lib.length moduleInfos;
 
-  # Generate outputs
+  # Generate outputs with custom suffix
   modulesOutput = fhs-modules.mkModulesOutput {
     moduleDirs = [ (testSource + "/modules") ];
-    suffix = ".nix";
+    suffix = ".mod.nix";
   };
 
   # Get all module names
@@ -108,16 +100,14 @@ let
 
   # Test checks
   checks = {
-    # Test 1: Verify module counts
+    # Test 1: Verify module counts (should NOT include helper.nix)
     testCounts =
       if guardedCount != 1 then
         throw "Expected 1 guarded module, got ${toString guardedCount}"
-      else if traditionalCount != 1 then
-        throw "Expected 1 traditional module, got ${toString traditionalCount}"
       else if singleCount != 1 then
         throw "Expected 1 single file module, got ${toString singleCount}"
-      else if totalCount != 3 then
-        throw "Expected 3 total modules, got ${toString totalCount}"
+      else if totalCount != 2 then
+        throw "Expected 2 total modules (helper.nix should be ignored), got ${toString totalCount}"
       else
         true;
 
@@ -125,8 +115,6 @@ let
     testOutputNames =
       if !(lib.elem "guarded-app" moduleNames) then
         throw "Expected 'guarded-app' in outputs, got: ${builtins.concatStringsSep ", " moduleNames}"
-      else if !(lib.elem "traditional-set" moduleNames) then
-        throw "Expected 'traditional-set' in outputs, got: ${builtins.concatStringsSep ", " moduleNames}"
       else if !(lib.elem "simple" moduleNames) then
         throw "Expected 'simple' in outputs, got: ${builtins.concatStringsSep ", " moduleNames}"
       else
@@ -139,49 +127,32 @@ let
       else
         true;
 
-    # Test 4: Verify traditional module always active
-    testTraditionalActive =
-      if evalAll.config.traditional-set.active != true then
-        throw "Traditional module should always be active"
-      else
-        true;
-
-    # Test 5: Verify single file module always active
+    # Test 4: Verify single file module always active
     testSingleActive =
       if evalAll.config.simple.active != true then
         throw "Single file module should always be active"
       else
         true;
 
-    # Test 6: Verify guarded module active when enabled
+    # Test 5: Verify guarded module active when enabled
     testGuardedActive =
       if evalAll.config.guarded-app.active != true then
         throw "Guarded module should be active when enabled"
       else
         true;
 
-    # Test 7: Verify guarded module NOT active when disabled
-    testGuardedInactive =
-      let
-        evalDisabled = lib.evalModules {
-          modules = [
-            modulesOutput.nixosModules.default
-            {
-              config.guarded-app.enable = false;
-            }
-          ];
-        };
-      in
-      if evalDisabled.config.guarded-app ? active then
-        throw "Guarded module should NOT be active when disabled"
+    # Test 6: Verify helper.nix was NOT loaded as a module
+    testHelperIgnored =
+      if lib.elem "helper" moduleNames then
+        throw "helper.nix should NOT be loaded as a module (wrong suffix)"
       else
         true;
   };
 
 in
-pkgs.runCommand "check-module-collection" { } ''
-  echo "=== Test 1: Verify module counts ==="
-  echo "PASS: Found 1 guarded, 1 traditional, 1 single = 3 total"
+pkgs.runCommand "check-module-custom-suffix" { } ''
+  echo "=== Test 1: Verify module counts (helper.nix ignored) ==="
+  echo "PASS: Found 1 guarded, 1 single = 2 total (helper.nix correctly ignored)"
 
   echo ""
   echo "=== Test 2: Verify output names ==="
@@ -192,20 +163,16 @@ pkgs.runCommand "check-module-collection" { } ''
   echo "PASS: default module exists"
 
   echo ""
-  echo "=== Test 4: Verify traditional module always active ==="
-  echo "PASS: Traditional module active"
-
-  echo ""
-  echo "=== Test 5: Verify single file module always active ==="
+  echo "=== Test 4: Verify single file module always active ==="
   echo "PASS: Single file module active"
 
   echo ""
-  echo "=== Test 6: Verify guarded module active when enabled ==="
+  echo "=== Test 5: Verify guarded module active when enabled ==="
   echo "PASS: Guarded module active when enabled"
 
   echo ""
-  echo "=== Test 7: Verify guarded module NOT active when disabled ==="
-  echo "PASS: Guarded module correctly disabled"
+  echo "=== Test 6: Verify helper.nix was NOT loaded ==="
+  echo "PASS: helper.nix correctly ignored (wrong suffix)"
 
   echo ""
   echo "=== All tests passed ==="

@@ -190,6 +190,52 @@ nix flake check                                  # Standard test (CI friendly)
 python checks/template-validation/validators.py  # Manual integration test (Full simulation)
 ```
 
+### Nix Lazy Evaluation and Test Framework
+
+**Critical Understanding**: Nix uses lazy evaluation, which has profound implications for test design.
+
+#### The Problem
+Unreferenced let bindings are never evaluated:
+```nix
+let
+  checks = {
+    test1 = if someCondition then throw "FAIL" else true;
+  };
+  # ❌ WRONG: checks is never used, so test1 is never evaluated!
+in
+pkgs.runCommand "test" { } ''
+  echo "PASS"  # Hardcoded success message
+  touch $out
+''
+```
+
+#### The Solution
+Tests must reference check results in the derivation to force evaluation:
+```nix
+let
+  checks = {
+    test1 = if someCondition then "FAIL: reason" else "PASS";
+    test2 = builtins.length someList == 2 || "FAIL: expected 2 items";
+  };
+  checkResults = builtins.attrValues checks;
+in
+pkgs.runCommand "test" { } ''
+  # Output actual check results (forces evaluation)
+  ${builtins.concatStringsSep "\n" (map (r: "echo '${r}'") checkResults)}
+
+  # Fail if any check failed
+  if echo '${builtins.toJSON checks}' | grep -q FAIL; then
+    exit 1
+  fi
+
+  touch $out
+''
+```
+
+#### Key Principles
+1. **Never hardcode test output** - Tests should output actual check results
+2. **Force evaluation via derivation** - Reference check results in `runCommand` to ensure they're evaluated
+
 ## Project Configuration
 
 ### lib.mkFlake Usage

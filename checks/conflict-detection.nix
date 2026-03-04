@@ -100,5 +100,5 @@ pkgs.runCommand "check-conflict-detection" { } ''
 
   echo ""
   echo "=== All tests passed ==="
-  echo "PASS" > $out
+  touch $out
 ''

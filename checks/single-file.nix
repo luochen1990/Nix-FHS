@@ -37,7 +37,7 @@ let
     { lib, ... }:
     {
       options.utils.feature = lib.mkEnableOption "utils feature";
-      config.utils.feature-enabled = true;
+      config.utils.feature = true;
     }
     EOF
 
@@ -46,19 +46,19 @@ let
     { lib, ... }:
     {
       options.helpers.common.setting = lib.mkOption {
-        type = lib.types.str;
-        default = "helper-default";
+        type = lib.types.bool;
+        default = false;
       };
-      config.helpers.common.active = true;
+      config.helpers.common.setting = true;
     }
     EOF
   '';
 
   # Build guarded tree
-  guardedTree = fhs-modules.mkGuardedTree (testSource + "/modules");
+  guardedTree = fhs-modules.mkGuardedTree (testSource + "/modules") ".nix";
 
   # Collect modules
-  moduleInfos = fhs-modules.collectModules (testSource + "/modules");
+  moduleInfos = fhs-modules.collectModules (testSource + "/modules") ".nix";
 
   # Find single file modules
   utilsInfo = lib.findFirst (
@@ -96,76 +96,82 @@ let
     # Test 1: Verify we found 2 single file modules
     testCount =
       if singleFileCount != 2 then
-        throw "Expected 2 single file modules, got ${toString singleFileCount}"
+        "FAIL: Expected 2 single file modules, got ${toString singleFileCount}"
       else
-        true;
+        "PASS: Found 2 single file modules";
 
     # Test 2: Verify utils module type and path
     testUtilsInfo =
       if utilsInfo.moduleType != "single" then
-        throw "Expected utils moduleType 'single', got '${utilsInfo.moduleType}'"
+        "FAIL: Expected utils moduleType 'single', got '${utilsInfo.moduleType}'"
       else if utilsInfo.kind != "file" then
-        throw "Expected utils kind 'file', got '${utilsInfo.kind}'"
+        "FAIL: Expected utils kind 'file', got '${utilsInfo.kind}'"
       else
-        true;
+        "PASS: utils module is single file type";
 
     # Test 3: Verify helpers.common module type and path
     testCommonInfo =
       if commonInfo.moduleType != "single" then
-        throw "Expected common moduleType 'single', got '${commonInfo.moduleType}'"
+        "FAIL: Expected common moduleType 'single', got '${commonInfo.moduleType}'"
       else if builtins.concatStringsSep "." commonInfo.modPath != "helpers.common" then
-        throw "Expected common modPath 'helpers.common', got '${builtins.concatStringsSep "." commonInfo.modPath}'"
+        "FAIL: Expected common modPath 'helpers.common', got '${builtins.concatStringsSep "." commonInfo.modPath}'"
       else
-        true;
+        "PASS: helpers.common module is single file type";
 
     # Test 4: Verify utils config is always applied
     testUtilsConfig =
-      if utilsEval.config.utils.feature-enabled != true then
-        throw "Single file module config should always be applied"
+      if utilsEval.config.utils.feature != true then
+        "FAIL: Single file module config should always be applied"
       else
-        true;
+        "PASS: utils config applied";
 
     # Test 5: Verify common config is always applied
     testCommonConfig =
-      if commonEval.config.helpers.common.active != true then
-        throw "Single file module config in subdirectory should always be applied"
+      if commonEval.config.helpers.common.setting != true then
+        "FAIL: Single file module config in subdirectory should always be applied"
       else
-        true;
+        "PASS: common config applied";
 
     # Test 6: Verify no auto-generated enable for single file modules
     testNoAutoEnable =
       if builtins.hasAttr "enable" utilsEval.options.utils then
-        throw "Single file module should NOT have auto-generated enable option"
+        "FAIL: Single file module should NOT have auto-generated enable option"
       else
-        true;
+        "PASS: No auto-generated enable option";
   };
 
 in
 pkgs.runCommand "check-single-file" { } ''
   echo "=== Test 1: Verify single file module count ==="
-  echo "PASS: Found 2 single file modules"
+  echo "${checks.testCount}"
 
   echo ""
   echo "=== Test 2: Verify utils module type and path ==="
-  echo "PASS: utils module is single file type"
+  echo "${checks.testUtilsInfo}"
 
   echo ""
   echo "=== Test 3: Verify helpers.common module type and path ==="
-  echo "PASS: helpers.common module is single file type"
+  echo "${checks.testCommonInfo}"
 
   echo ""
   echo "=== Test 4: Verify utils config is always applied ==="
-  echo "PASS: utils config applied"
+  echo "${checks.testUtilsConfig}"
 
   echo ""
   echo "=== Test 5: Verify common config is always applied ==="
-  echo "PASS: common config applied"
+  echo "${checks.testCommonConfig}"
 
   echo ""
   echo "=== Test 6: Verify no auto-generated enable ==="
-  echo "PASS: No auto-generated enable option"
+  echo "${checks.testNoAutoEnable}"
 
   echo ""
+  # Fail if any check failed
+  if echo '${builtins.toJSON checks}' | grep -q FAIL; then
+    echo "=== Some tests FAILED ==="
+    exit 1
+  fi
+
   echo "=== All tests passed ==="
-  echo "PASS" > $out
+  touch $out
 ''
