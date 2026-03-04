@@ -39,7 +39,6 @@ let
         lib
         supportedSystems
         nixpkgsConfig
-        optionsMode
         layout
         systemContext
         ;
@@ -113,8 +112,9 @@ let
           outputBuilder sysContext
         );
 
-      moduleTree = flakeFhsLib.mkGuardedTree args (
-        concatFor roots (
+      # Discover module directories
+      moduleDirs = concatLists (
+        map (
           root:
           forFilter layout.nixosModules.subdirs (
             subdir:
@@ -123,24 +123,14 @@ let
             in
             if pathExists p then p else null
           )
-        )
+        ) roots
       );
 
-      # Recursively collect all guarded nodes from the tree
-      collectAllGuardedNodes = tree:
-        tree.guardedChildrenNodes
-        ++ concatFor tree.guardedChildrenNodes (it: collectAllGuardedNodes it);
-
       # Shared modules for both NixOS configurations and Colmena
-      sharedModules =
-        moduleTree.unguardedConfigPaths
-        ++ concatFor (collectAllGuardedNodes moduleTree) (it: [
-          (flakeFhsLib.mkOptionsModule args it)
-          (flakeFhsLib.mkDefaultModule args it)
-        ])
-        ++ [
-          hostnameModule
-        ];
+      sharedModules = [
+        (flakeFhsLib.getAllModulesDefault moduleDirs)
+        hostnameModule
+      ];
 
       # Inject hostname by default
       hostnameModule =
@@ -223,9 +213,7 @@ let
     // (flakeFhsLib.mkFormatterOutput args {
       inherit eachSystem;
     })
-    // (flakeFhsLib.mkModulesOutput args {
-      inherit moduleTree;
-    })
+    // (flakeFhsLib.mkModulesOutput moduleDirs)
     // (flakeFhsLib.mkConfigurationsOutput args {
       inherit validHosts sharedModules mkSysContext;
     })

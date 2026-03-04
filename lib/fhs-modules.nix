@@ -3,111 +3,64 @@
 # Flake FHS module system logic and output generation
 #
 # ================================================================
-# 设计文档: 模块系统
+# 设计文档: 模块系统 (重构版)
 # ================================================================
 #
-# ## 1. 核心概念
+# ## 1. 模块类型 (三种互斥类型)
 #
-# ### 1.1 Guarded Module (受保护模块)
-# - 一个目录如果包含 `options.nix` 文件，就被称为 "guarded module"
-# - `options.nix` 定义该模块的选项（options）
-# - 每个 guarded module 会被展开为两个独立的 nixosModules:
-#   - `<modPath>.options` - 仅引入 options.nix
-#   - `<modPath>.config` - 引入配置实现
+# ### 1.1 Guarded Directory Module (受保护目录模块)
+# - 标识符: 目录包含 options.nix
+# - 特性:
+#   - 自动生成 enable 选项
+#   - 配置文件用 mkIf enable 包裹
+#   - 嵌套模块检查所有父级的 enable
+# - 约束: 不能有 default.nix (冲突错误)
+# - 用例: 可选功能模块
 #
-# ### 1.2 Unguarded Directory (非受保护目录)
-# - 没有 `options.nix` 的目录
-# - 其中的 `.nix` 文件会被直接收集
+# ### 1.2 Traditional Directory Module (传统目录模块)
+# - 标识符: 目录包含 default.nix (无 options.nix)
+# - 特性: 直接导出，无 enable 机制
+# - 约束: 不支持嵌套 (有 default.nix 的子目录不被识别)
+# - 用例: 配置集合，复杂模块
 #
-# ## 2. default.nix 处理逻辑
+# ### 1.3 Single File Module (单文件模块)
+# - 标识符: 独立的 .nix 文件
+# - 特性: 直接导出，无 enable 机制
+# - 用例: 简单模块
 #
-# default.nix 用于显式控制模块的引入方式，与 options.nix 是独立的机制。
+# ## 2. 核心数据结构
 #
-# ### 2.1 有 default.nix 的情况
-# - 如果 guarded module 目录有 `default.nix`，则 `.config` 模块直接使用它
-# - `default.nix` 负责引入该模块的所有配置实现
-# - 注意: `default.nix` 不应该引入 `options.nix`（会通过 `.options` 模块单独引入）
+# ### 2.1 GuardedTree
+# GuardedTree 是 guarded 模块的单一数据源 (SSOT)
 #
-# ### 2.2 没有 default.nix 的情况 (虚拟 default.nix)
-# - 如果 guarded module 目录没有 `default.nix`，系统会创建一个"虚拟 default.nix"
-# - 虚拟 default.nix 会递归收集该目录下:
-#   - 所有 unguarded 的 `.nix` 文件
-#   - 所有有 `default.nix` 的子目录（引入其 default.nix）
-#   - 跳过所有 guarded module 子目录（由它们自己的虚拟 default.nix 处理）
-#
-# ### 2.3 设计意图
-# 这个设计允许用户选择两种组织方式:
-#
-# 方式 A: 手动控制（使用 default.nix）
-# ```
-# modules/
-# └── myapp/
-#     ├── options.nix      # 标记为 guarded module
-#     └── default.nix      # 显式控制引入哪些文件
-# ```
-# - default.nix 内容示例:
-#   ```nix
-#   { ... }: {
-#     imports = [ ./config.nix ./services ];
-#   }
-#   ```
-#
-# 方式 B: 自动发现（无 default.nix）
-# ```
-# modules/
-# └── myapp/
-#     ├── options.nix      # 标记为 guarded module
-#     ├── feature1.nix     # 自动被发现
-#     ├── feature2.nix     # 自动被发现
-#     └── sub/
-#         └── feature3.nix # 自动被发现
-# ```
-# - 系统会自动创建虚拟 default.nix 引入所有 .nix 文件
-#
-# ## 3. importUnguardedFiles 工具函数
-#
-# 当在 default.nix 中需要收集文件时，应该使用 `importUnguardedFiles` 而不是 `findFilesRec`:
-#
-# ```nix
-# # bedrock/default.nix
-# { tools, ... }: {
-#   imports = tools.importUnguardedFiles ".mod.nix" ./.;
+# type GuardedTree = {
+#   modPath :: [String];           # 模块路径段
+#   path :: Path;                  # 文件系统路径
+#   parentGuardedPaths :: [[String]];  # 父级 guarded 路径 (用于嵌套 mkIf)
+#   fullGuardedPath :: [String];   # 完整路径 (包括自身)
+#   files :: [String];             # 目录中的文件
+#   unguardedFiles :: [Path];      # unguarded 配置文件路径
+#   guardedChildren :: [GuardedTree];  # 子级 guarded 模块
 # }
-# ```
 #
-# `importUnguardedFiles` 与 `findFilesRec` 的关键区别:
-# - `findFilesRec` 会递归穿透所有子目录，可能导致重复引入
-# - `importUnguardedFiles` 尊重 guarded module 边界:
-#   - 遇到 guarded module 时跳过（由 flake-fhs 的虚拟 default.nix 处理）
-#   - 遇到有 default.nix 的目录时引入它
-#   - 其他目录递归处理
+# ### 2.2 ModuleInfo
+# ModuleInfo 描述所有三种模块类型
 #
-# ## 4. 文件引入责任划分
+# type ModuleInfo = {
+#   modPath :: [String];           # 模块路径段
+#   path :: Path;                  # 文件系统路径
+#   moduleType :: "guarded" | "traditional" | "single";
+#   kind :: "file" | "directory";
+#   hasOptions :: Bool;
+#   hasDefault :: Bool;
+#   unguardedFiles :: [Path];      # 仅 guarded 模块使用
+#   parentGuardedPaths :: [[String]];  # 用于嵌套 mkIf
+# }
 #
-# 通过以上设计，文件引入的责任被清晰划分:
+# ## 3. 输出结构
 #
-# ```
-# bedrock/                     # 有 options.nix (guarded) + default.nix
-# ├── options.nix
-# ├── default.nix              # 使用 importUnguardedFiles ".mod.nix"
-# ├── prelude.mod.nix          # 由 bedrock/default.nix 引入
-# └── network/                 # 有 options.nix (guarded)，无 default.nix
-#     ├── options.nix          # 跳过（不引入 options.nix）
-#     ├── core.mod.nix         # 由 network/ 的虚拟 default.nix 引入
-#     └── adguard/
-#         └── service.mod.nix  # 由 network/ 的虚拟 default.nix 引入
-# ```
-#
-# - `bedrock/default.nix` 只负责 `bedrock/` 目录下的 unguarded 文件
-# - `network/` 是 guarded module，由 flake-fhs 的虚拟 default.nix 负责引入其内容
-# - 结果：每个文件只被引入一次，责任边界清晰
-#
-# ## 5. 输出结构
-#
-# 对于每个 guarded module，生成:
-# - `nixosModules.<modPath>.options` - 选项声明
-# - `nixosModules.<modPath>.config` - 配置实现
-# - `nixosModules.default` - 引入所有模块的默认入口
+# - nixosModules.<modPath> - 每个模块的独立输出
+# - nixosModules.default - 引入所有模块的默认入口
 #
 lib:
 let
@@ -121,6 +74,7 @@ let
     pathExists
     removeAttrs
     listToAttrs
+    foldl'
     ;
 
   inherit (lib)
@@ -130,22 +84,139 @@ let
     forFilter
     concatFor
     isEmptyFile
+    underDir
     ;
 
   # ================================================================
-  # Module System Helpers
+  # 1. mkGuardedTree - Guarded 模块的 SSOT
   # ================================================================
 
-  # warpModule :: Config -> [String] -> (Path | Module) -> Module
-  warpModule =
-    { optionsMode, ... }:
-    modPath: module:
+  # mkGuardedTreeNode :: { modPath, path, parentGuardedPaths } -> GuardedTree
+  #
+  # 递归构建 guarded 模块树
+  # - 检测 options.nix + default.nix 冲突
+  # - 收集 unguarded 配置文件
+  # - 跟踪父级 guarded 路径用于嵌套 mkIf
+  #
+  mkGuardedTreeNode =
+    {
+      modPath,
+      path,
+      parentGuardedPaths,
+    }:
     let
+      files = lsFiles path;
+      hasOptions = elem "options.nix" files;
+      hasDefault = elem "default.nix" files;
+
+      # 冲突检测: options.nix 和 default.nix 不能共存
+      _ =
+        if hasOptions && hasDefault then
+          throw "Conflict in ${toString path}: Cannot have both options.nix and default.nix. Choose one module type: guarded (options.nix only) or traditional (default.nix only)."
+        else
+          null;
+
+      # 收集 unguarded 配置文件 (仅对没有 default.nix 的 guarded 模块)
+      unguardedFiles =
+        if hasOptions && !hasDefault then
+          forFilter files (
+            f: if hasSuffix ".nix" f && f != "options.nix" && f != "scope.nix" then path + "/${f}" else null
+          )
+        else
+          [ ];
+
+      # 完整 guarded 路径 (包括自身)
+      fullGuardedPath = parentGuardedPaths ++ [ modPath ];
+
+      # 递归处理子目录
+      # 使用 exploreDir 提供的 breadcrumbs' 来正确累积 modPath
+      guardedChildren = exploreDir [ path ] (it: rec {
+        options-dot-nix = it.path + "/options.nix";
+        default-dot-nix = it.path + "/default.nix";
+        guarded = pathExists options-dot-nix;
+        defaulted = pathExists default-dot-nix;
+
+        # 进入非-guarded 且非-defaulted 的目录
+        into = !(guarded || defaulted);
+        # 收集 guarded 目录
+        pick = guarded;
+
+        # 计算当前节点的 modPath (基于 breadcrumbs')
+        currentModPath = it.breadcrumbs';
+
+        # 计算父级 guarded 路径
+        # 需要找到从根到当前的所有 guarded 祖先
+        currentParentGuardedPaths = if hasOptions then fullGuardedPath else parentGuardedPaths;
+
+        out = mkGuardedTreeNode {
+          modPath = currentModPath;
+          path = it.path;
+          # 传递更新后的父级 guarded 路径给子级
+          parentGuardedPaths = currentParentGuardedPaths;
+        };
+      });
+    in
+    {
+      inherit
+        modPath
+        path
+        files
+        unguardedFiles
+        guardedChildren
+        ;
+      inherit parentGuardedPaths fullGuardedPath;
+    };
+
+  # mkGuardedTree :: Path -> GuardedTree
+  mkGuardedTree =
+    root:
+    mkGuardedTreeNode {
+      modPath = [ ];
+      path = root;
+      parentGuardedPaths = [ ];
+    };
+
+  # ================================================================
+  # 2. Generic Module Wrapper
+  # ================================================================
+
+  # genericWrapModule :: {
+  #   injectEnable :: Bool,
+  #   checkStrictOptions :: Bool,
+  #   enableCheckPath :: [[String]]?
+  # } -> ModuleInfo -> (Path | Module) -> Module
+  #
+  # 统一的模块包装引擎
+  # - injectEnable: 是否注入 enable 选项
+  # - checkStrictOptions: 是否检查选项严格匹配路径
+  # - enableCheckPath: 用于嵌套 guarded 模块的 enable 检查路径
+  #
+  genericWrapModule =
+    {
+      injectEnable,
+      checkStrictOptions,
+      enableCheckPath ? null,
+    }:
+    moduleInfo: module:
+    let
+      modPath = moduleInfo.modPath;
+
       isPath = builtins.isPath module || builtins.isString module;
       file = if isPath then module else null;
-      raw = if isPath then if isEmptyFile module then { } else import module else module;
+      isDir = if isPath then builtins.pathExists (module + "/.") else false;
 
-      # Check logic for Strict mode
+      raw =
+        if isPath then
+          if isDir then
+            import module
+          else if isEmptyFile module then
+            { }
+          else
+            import module
+        else
+          module;
+
+      # 严格模式验证
       checkStrict =
         opts: path:
         if opts == { } || path == [ ] then
@@ -159,44 +230,33 @@ let
           else
             false;
 
-      # Core logic to transform module content
+      # 转换模块内容
       transform =
         content:
-        {
-          config,
-          lib,
-          ...
-        }:
+        { config, lib, ... }:
         let
           opts = content.options or { };
 
-          # 1. Validation
+          # 1. 严格验证
           _ =
-            if optionsMode == "strict" && !checkStrict opts modPath then
-              throw "Strict mode violation: options in ${toString file} must strictly follow the directory structure ${concatStringsSep "." modPath}"
+            if checkStrictOptions && !checkStrict opts modPath then
+              throw "Strict mode violation: options in ${toString file} must follow ${concatStringsSep "." modPath}"
             else
               null;
 
-          # 2. Nesting
-          nestedOpts = if optionsMode == "auto" && opts != { } then lib.setAttrByPath modPath opts else opts;
-
-          # 3. Enable Option
+          # 2. Enable 选项注入
           enablePath = modPath ++ [ "enable" ];
           finalOpts =
-            if
-              file != null
-              && baseNameOf (toString file) == "options.nix"
-              && !lib.hasAttrByPath enablePath nestedOpts
-            then
-              lib.recursiveUpdate nestedOpts (
+            if injectEnable && !lib.hasAttrByPath enablePath opts then
+              lib.recursiveUpdate opts (
                 lib.setAttrByPath modPath {
                   enable = lib.mkEnableOption (concatStringsSep "." modPath);
                 }
               )
             else
-              nestedOpts;
+              opts;
 
-          # 4. Config
+          # 3. Config 合并
           explicitConfig = content.config or { };
           implicitConfig = removeAttrs content [
             "imports"
@@ -209,14 +269,47 @@ let
             "__functionArgs"
           ];
           mergedConfig = explicitConfig // implicitConfig;
+
+          # 4. mkIf 条件 (用于嵌套 guarded 模块)
+          mkIfCondition =
+            if enableCheckPath != null then
+              # 嵌套: 检查所有父级 enable 和自身
+              let
+                allEnablePaths = enableCheckPath ++ [ (modPath ++ [ "enable" ]) ];
+                conditions = map (path: lib.attrsets.getAttrFromPath path config) allEnablePaths;
+              in
+              foldl' (acc: cond: acc && cond) true conditions
+            else if injectEnable then
+              # 顶层: 只检查自身
+              lib.attrsets.getAttrFromPath enablePath config
+            else
+              true; # 无 enable 检查
+
+          # 5. 递归包装本地 imports
+          originalImports = content.imports or [ ];
+          wrappedImports = map (
+            i:
+            let
+              isPathOrString = builtins.isPath i || builtins.isString i;
+              shouldWrap =
+                if isPathOrString && file != null then
+                  let
+                    currentDir = if isDir then file else builtins.dirOf file;
+                  in
+                  underDir currentDir i
+                else
+                  false;
+            in
+            if shouldWrap then wrapNormalModule false moduleInfo i else i
+          ) originalImports;
         in
         {
-          imports = content.imports or [ ];
+          imports = wrappedImports;
           options = finalOpts;
-          config = lib.mkIf (lib.attrsets.getAttrFromPath enablePath config) mergedConfig;
+          config = lib.mkIf mkIfCondition mergedConfig;
         };
 
-      # Wrap raw module into a functor
+      # Functor 包装
       functor =
         if builtins.isFunction raw then
           {
@@ -224,179 +317,346 @@ let
             __functionArgs = builtins.functionArgs raw;
           }
         else
-          {
-            __functor = self: args: transform raw args;
-          };
+          { __functor = self: args: transform raw args; };
     in
     if file != null then
       {
         _file = file;
+        key = toString file + ":fhs-wrapped";
         imports = [ functor ];
       }
     else
       functor;
 
-  # mkOptionsModule : Config -> GuardedTreeNode -> Module
-  mkOptionsModule =
-    config: it:
+  # wrapNormalModule :: Bool -> ModuleInfo -> (Path | Module) -> Module
+  # 用于递归包装本地 imports
+  wrapNormalModule =
+    injectEnable: moduleInfo: module:
+    genericWrapModule {
+      inherit injectEnable;
+      checkStrictOptions = false;
+    } moduleInfo module;
+
+  # ================================================================
+  # 3. Specialized Wrappers
+  # ================================================================
+
+  # wrapGuardedOptions :: GuardedTree -> Module
+  # 包装 guarded 模块的 options.nix
+  wrapGuardedOptions =
+    tree:
     let
-      modPath = it.modPath;
-      options-dot-nix = it.path + "/options.nix";
+      moduleInfo = {
+        modPath = tree.modPath;
+        path = tree.path;
+        kind = "directory";
+        hasOptions = true;
+        hasDefault = false;
+        moduleType = "guarded";
+        inherit (tree) parentGuardedPaths;
+      };
+    in
+    genericWrapModule {
+      injectEnable = true;
+      checkStrictOptions = true;
+    } moduleInfo (tree.path + "/options.nix");
+
+  # wrapGuardedConfig :: GuardedTree -> Module
+  # 包装 guarded 模块的配置文件
+  wrapGuardedConfig =
+    tree:
+    let
+      moduleInfo = {
+        modPath = tree.modPath;
+        path = tree.path;
+        kind = "directory";
+        hasOptions = true;
+        hasDefault = false;
+        moduleType = "guarded";
+        inherit (tree) parentGuardedPaths;
+      };
+
+      # Enable 检查路径: 所有父级 guarded 路径 + 自身路径
+      # 用于生成 mkIf 条件
+      allGuardedPaths = tree.parentGuardedPaths ++ [ tree.modPath ];
+      enableCheckPath = map (p: p ++ [ "enable" ]) allGuardedPaths;
+
+      wrapFile =
+        filePath:
+        genericWrapModule {
+          injectEnable = false;
+          checkStrictOptions = false;
+          inherit enableCheckPath;
+        } moduleInfo filePath;
     in
     {
-      imports = [
-        (warpModule config modPath options-dot-nix)
-      ];
+      key = toString tree.path + "/config";
+      imports = map wrapFile tree.unguardedFiles;
     };
 
-  # mkDefaultModule : Config -> GuardedTreeNode -> Module
-  # 
-  # 为 guarded module 生成配置模块 (.config)
-  # 
-  # 引入来源（互斥）:
-  # 1. 如果有 default.nix，则只引入它（default.nix 负责导入其 unguarded 子内容）
-  # 2. 否则引入 unguardedConfigPaths（虚拟 default.nix 的内容）
-  #
-  mkDefaultModule = config: it: 
-    let
-      default-dot-nix = it.path + "/default.nix";
-      hasDefault = pathExists default-dot-nix;
-    in {
-      imports = 
-        if hasDefault then 
-          [ default-dot-nix ]
-        else 
-          map (warpModule config it.modPath) it.unguardedConfigPaths;
-    };
+  # wrapGuardedModule :: GuardedTree -> Module
+  # 包装完整的 guarded 模块 (options + config)
+  wrapGuardedModule = tree: {
+    key = toString tree.path;
+    imports = [
+      (wrapGuardedOptions tree)
+      (wrapGuardedConfig tree)
+    ];
+  };
+
+  # wrapTraditionalModule :: ModuleInfo -> Module
+  # 包装传统目录模块
+  wrapTraditionalModule =
+    moduleInfo:
+    genericWrapModule {
+      injectEnable = false;
+      checkStrictOptions = false;
+    } moduleInfo (moduleInfo.path + "/default.nix");
+
+  # wrapSingleModule :: ModuleInfo -> Module
+  # 包装单文件模块
+  wrapSingleModule =
+    moduleInfo:
+    genericWrapModule {
+      injectEnable = false;
+      checkStrictOptions = false;
+    } moduleInfo moduleInfo.path;
 
   # ================================================================
-  # Tree Traversal (Guarded)
+  # 4. Module Collection
   # ================================================================
 
-  # mkGuardedTreeNode : { modPath, path } -> GuardedTreeNode
-  # 
-  # GuardedTreeNode 表示一个有 options.nix 的 guarded module
-  # 
-  # 虚拟 default.nix 逻辑:
-  # - 如果目录没有 default.nix，unguardedConfigPaths 会收集:
-  #   - 所有 unguarded 的 .nix 文件
-  #   - 所有有 default.nix 的子目录
-  #   - 跳过所有 guarded module 子目录（由它们自己的虚拟 default.nix 处理）
-  #
-  mkGuardedTreeNode =
-    {
-      modPath,
-      path,
-    }:
+  # collectModules :: Path -> [ModuleInfo]
+  # 收集所有三种类型的模块
+  collectModules =
+    root:
     let
-      default-dot-nix = path + "/default.nix";
-      hasDefault = pathExists default-dot-nix;
-      
-      unguardedConfigPaths = concatLists (
-        exploreDir [ path ] (it: rec {
-          options-dot-nix = it.path + "/options.nix";
-          default-dot-nix = it.path + "/default.nix";
-          guarded = pathExists options-dot-nix;
-          defaulted = pathExists default-dot-nix;
-          # 进入非-guarded 且非-defaulted 的目录
-          into = !(guarded || defaulted);
-          # 收集非-guarded 的目录
-          pick = !guarded;
-          out =
-            if defaulted then
-              [ default-dot-nix ]
+      # 1. 构建 guarded 树
+      guardedTree = mkGuardedTree root;
+
+      # 2. 收集所有 guarded 节点 (递归)
+      collectGuardedNodes = tree: [ tree ] ++ concatLists (map collectGuardedNodes tree.guardedChildren);
+
+      allGuardedNodes = collectGuardedNodes guardedTree;
+
+      # 转换 guarded 树为 ModuleInfo
+      guardedModuleInfos = map (tree: {
+        modPath = tree.modPath;
+        path = tree.path;
+        moduleType = "guarded";
+        kind = "directory";
+        hasOptions = true;
+        hasDefault = false;
+        inherit (tree) unguardedFiles parentGuardedPaths;
+      }) (lib.filter (t: t.modPath != [ ]) allGuardedNodes);
+
+      # 3. 收集传统和单文件模块
+      guardedPaths = map (t: t.path) allGuardedNodes;
+
+      # 根据路径在 guarded 树中查找对应的树节点
+      findTreeByPath =
+        tree: targetPath:
+        if tree.path == targetPath then
+          tree
+        else
+          lib.findFirst (t: t != null) null (
+            map (child: findTreeByPath child targetPath) tree.guardedChildren
+          );
+
+      scanOthers =
+        path: breadcrumbs:
+        let
+          files = lsFiles path;
+          dirs = lib.lsDirs path;
+
+          hasDefault = elem "default.nix" files;
+          isGuarded = elem path guardedPaths;
+
+          # 传统模块
+          traditional =
+            if !isGuarded && hasDefault then
+              [
+                {
+                  modPath = breadcrumbs;
+                  path = path;
+                  moduleType = "traditional";
+                  kind = "directory";
+                  hasOptions = false;
+                  hasDefault = true;
+                  unguardedFiles = [ ];
+                  parentGuardedPaths = [ ];
+                }
+              ]
             else
-              forFilter (lsFiles it.path) (
-                fname: if hasSuffix ".nix" fname then (it.path + "/${fname}") else null
-              );
-        })
-      );
+              [ ];
 
-      guardedChildrenNodes = exploreDir [ path ] (it: rec {
-        options-dot-nix = it.path + "/options.nix";
-        guarded = pathExists options-dot-nix;
-        into = !guarded;
-        pick = guarded;
-        out = mkGuardedTreeNode {
-          modPath = it.breadcrumbs';
-          path = it.path;
-        };
-      });
+          # 单文件模块
+          single =
+            if !isGuarded && !hasDefault then
+              forFilter files (
+                f:
+                if hasSuffix ".nix" f then
+                  let
+                    name = lib.removeSuffix ".nix" f;
+                  in
+                  [
+                    {
+                      modPath = breadcrumbs ++ [ name ];
+                      path = path + "/${f}";
+                      moduleType = "single";
+                      kind = "file";
+                      hasOptions = false;
+                      hasDefault = false;
+                      unguardedFiles = [ ];
+                      parentGuardedPaths = [ ];
+                    }
+                  ]
+                else
+                  null
+              )
+            else
+              [ ];
+
+          # 递归子目录
+          # 注意: 传统模块不支持嵌套 - 有 default.nix 的子目录被跳过
+          subResults = concatLists (
+            map (
+              d:
+              let
+                subPath = path + "/${d}";
+                isSubGuarded = elem subPath guardedPaths;
+                hasSubDefault = builtins.pathExists (subPath + "/default.nix");
+              in
+              # 跳过有 default.nix 的子目录 (传统模块不嵌套)
+              if !isSubGuarded && !hasSubDefault then scanOthers subPath (breadcrumbs ++ [ d ]) else [ ]
+            ) dirs
+          );
+        in
+        traditional ++ single ++ subResults;
+
+      otherModuleInfos = scanOthers root [ ];
     in
-    {
-      inherit
-        modPath
-        path
-        guardedChildrenNodes
-        unguardedConfigPaths
-        ;
-    };
+    guardedModuleInfos ++ otherModuleInfos;
 
-  mkGuardedTree =
-    config: rootModulePaths:
+  # wrapModule :: Path -> ModuleInfo -> Module
+  # 根据模块类型包装模块
+  wrapModule =
+    guardedTree: moduleInfo:
+    if moduleInfo.moduleType == "guarded" then
+      # 需要重建 GuardedTree 用于 guarded 模块
+      let
+        tree = findTreeByPathDeep guardedTree moduleInfo.path;
+        findTreeByPathDeep =
+          tree: targetPath:
+          if tree.path == targetPath then
+            tree
+          else
+            lib.findFirst (t: t != null) null (
+              map (child: findTreeByPathDeep child targetPath) tree.guardedChildren
+            );
+      in
+      if tree != null then
+        wrapGuardedModule tree
+      else
+        throw "Cannot find guarded tree for ${toString moduleInfo.path}"
+    else if moduleInfo.moduleType == "traditional" then
+      wrapTraditionalModule moduleInfo
+    # single
+    else
+      wrapSingleModule moduleInfo;
+
+  # ================================================================
+  # 5. Output Generation
+  # ================================================================
+
+  # mkModulesOutputSingle :: Path -> { modules :: [{ name :: String, value :: Module }], default :: Module }
+  # 为单个目录生成模块输出
+  mkModulesOutputSingle =
+    modulesDir:
     let
-      forest = map (
-        path:
-        mkGuardedTreeNode {
-          inherit path;
-          modPath = [ ];
-        }
-      ) rootModulePaths;
+      guardedTree = mkGuardedTree modulesDir;
+      moduleInfos = collectModules modulesDir;
+
+      # 生成独立模块输出
+      modules = map (info: {
+        name = concatStringsSep "." info.modPath;
+        value = wrapModule guardedTree info;
+      }) moduleInfos;
+
+      # default 模块 - 引入所有模块
+      defaultModule = {
+        key = toString modulesDir + ":default";
+        imports = map (m: m.value) modules;
+      };
     in
     {
-      guardedChildrenNodes = concatFor forest (t: t.guardedChildrenNodes);
-      unguardedConfigPaths = concatFor forest (t: t.unguardedConfigPaths);
+      inherit modules;
+      default = defaultModule;
     };
 
-  # ================================================================
-  # Output Generation
-  # ================================================================
-
-  # Recursively collect all guarded nodes from the tree
-  collectAllGuardedNodes = tree:
-    tree.guardedChildrenNodes
-    ++ concatFor tree.guardedChildrenNodes (it: collectAllGuardedNodes it);
-
+  # mkModulesOutput :: [Path] -> { nixosModules :: AttrSet }
+  # 为多个目录生成模块输出
   mkModulesOutput =
-    args:
-    { moduleTree }:
+    modulesDirs:
     let
-      allGuardedNodes = collectAllGuardedNodes moduleTree;
+      # 收集所有目录的模块
+      allOutputs = map mkModulesOutputSingle modulesDirs;
+
+      # 合并所有模块
+      allModules = concatLists (map (o: o.modules) allOutputs);
+
+      # 检测重复的模块名
+      moduleNames = map (m: m.name) allModules;
+      _ =
+        let
+          duplicates = lib.filter (name: lib.count (n: n == name) moduleNames > 1) (lib.unique moduleNames);
+        in
+        if lib.length duplicates > 0 then
+          throw "Duplicate module names found: ${concatStringsSep ", " duplicates}"
+        else
+          null;
+
+      # default 模块 - 引入所有模块
+      defaultModule = {
+        key = "default";
+        imports = map (m: m.value) allModules;
+      };
     in
     {
-      nixosModules =
-        listToAttrs (
-          concatFor allGuardedNodes (it: [
-            {
-              name = (concatStringsSep "." it.modPath) + ".options";
-              value = mkOptionsModule args it;
-            }
-            {
-              name = (concatStringsSep "." it.modPath) + ".config";
-              value = mkDefaultModule args it;
-            }
-          ])
-        )
-        // {
-          default = {
-            imports =
-              moduleTree.unguardedConfigPaths
-              ++ concatFor allGuardedNodes (it: [
-                (mkOptionsModule args it)
-                (mkDefaultModule args it)
-              ]);
-          };
-        };
+      nixosModules = listToAttrs allModules // {
+        default = defaultModule;
+      };
+    };
+
+  # getAllModulesDefault :: [Path] -> Module
+  # 获取所有模块的 default 模块 (用于 sharedModules)
+  getAllModulesDefault =
+    modulesDirs:
+    let
+      allOutputs = map mkModulesOutputSingle modulesDirs;
+      allModules = concatLists (map (o: o.modules) allOutputs);
+    in
+    {
+      key = "default";
+      imports = map (m: m.value) allModules;
     };
 
 in
 {
   inherit
-    warpModule
-    mkOptionsModule
-    mkDefaultModule
     mkGuardedTree
     mkGuardedTreeNode
+    genericWrapModule
+    wrapGuardedOptions
+    wrapGuardedConfig
+    wrapGuardedModule
+    wrapTraditionalModule
+    wrapSingleModule
+    wrapNormalModule
+    collectModules
+    wrapModule
+    mkModulesOutputSingle
     mkModulesOutput
+    getAllModulesDefault
     ;
 }

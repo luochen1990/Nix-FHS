@@ -88,16 +88,6 @@ let
           description = "List of supported systems";
         };
 
-        optionsMode = lib.mkOption {
-          type = lib.types.enum [
-            "auto"
-            "strict"
-            "free"
-          ];
-          default = "strict";
-          description = "Mode for handling options.nix files: 'auto' (nest options under module path), 'strict' (check options match module path), 'free' (no restrictions)";
-        };
-
         nixpkgs.config = lib.mkOption {
           type = lib.types.attrs;
           default = {

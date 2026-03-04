@@ -11,12 +11,15 @@ let
     lib // (import ../../lib/list.nix) // (import ../../lib/dict.nix) // (import ../../lib/file.nix);
   inherit (import ../../lib/fhs-lib.nix utils') prepareLib;
 
-  libWithUtils = utils' // {
-    inherit prepareLib;
+  # Properly prepare the library with roots to load all lib files
+  # This matches how the main flake.nix sets up the library
+  libWithAllFunctions = prepareLib {
+    roots = [ ../../. ];
+    lib = lib;
   };
 
-  # Import the core library we are testing
-  flake-fhs = import ../../lib/flake-fhs.nix libWithUtils;
+  # Import the core library we are testing with the full library
+  flake-fhs = import ../../lib/flake-fhs.nix libWithAllFunctions;
 
   # Helper to evaluate a single template
   checkTemplate =
