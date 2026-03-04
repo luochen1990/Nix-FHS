@@ -31,11 +31,7 @@ let
         };
       }
       {
-        layout = {
-          roots = {
-            subdirs = [ ];
-          };
-        };
+        layout.roots = [ ];
         flake = {
           testOutput = "success";
           packages.${pkgs.stdenv.hostPlatform.system}.hello = pkgs.hello;

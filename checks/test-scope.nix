@@ -43,11 +43,7 @@ let
       }
       {
         # Override the root layout to point to our dynamic source
-        layout = {
-          roots = {
-            subdirs = [ "" ];
-          };
-        };
+        layout.roots = [ "" ];
       };
 in
 pkgs.runCommand "check-scope" { } ''

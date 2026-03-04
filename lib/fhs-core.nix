@@ -45,12 +45,12 @@ let
 
       partOf = mapAttrs (
         name: value: x:
-        elem x (value.subdirs)
+        elem x value.subdirs
       ) layout;
 
       # roots = [Path]
 
-      roots = forFilter (layout.roots.subdirs or [ ]) (
+      roots = forFilter layout.roots (
         d:
         let
           p = self.outPath + "/${trimPath d}";

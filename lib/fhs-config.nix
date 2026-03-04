@@ -7,97 +7,10 @@ let
   # ================================================================
   # Configuration Schema
   # ================================================================
-  defaultLayout = {
-    roots = {
-      subdirs = [
-        ""
-        "/nix"
-      ];
-    };
-    packages = {
-      subdirs = [
-        "pkgs"
-        "packages"
-      ];
-    };
-    nixosModules = {
-      subdirs = [
-        "modules"
-        "nixosModules"
-      ];
-    };
-    nixosConfigurations = {
-      subdirs = [
-        "hosts"
-        "profiles"
-        "nixosConfigurations"
-      ];
-    };
-    devShells = {
-      subdirs = [
-        "shells"
-        "devShells"
-      ];
-    };
-    apps = {
-      subdirs = [ "apps" ];
-    };
-    lib = {
-      subdirs = [
-        "lib"
-        "tools"
-        "utils"
-      ];
-    };
-    checks = {
-      subdirs = [ "checks" ];
-    };
-    templates = {
-      subdirs = [ "templates" ];
-    };
-  };
 
   # Configuration Module Schema
   flakeFhsOptions =
     { lib, ... }:
-    let
-      # mkLayoutEntry :: String -> AttrSet -> AttrSet -> Option
-      # Create a layout entry option with optional extra options
-      mkLayoutEntry =
-        description: default: extraOptions:
-        lib.mkOption {
-          inherit description;
-          inherit default;
-          type =
-            lib.types.coercedTo (lib.types.listOf (lib.types.either lib.types.str lib.types.path))
-              (l: { subdirs = l; })
-              (
-                lib.types.submodule {
-                  options = {
-                    subdirs = lib.mkOption {
-                      type = lib.types.listOf (lib.types.either lib.types.str lib.types.path);
-                      description = "List of subdirectories or paths";
-                      default = [ ];
-                    };
-                  }
-                  // extraOptions;
-                }
-              );
-        };
-
-      # No extra options for most layout entries
-      noExtraOptions = { };
-
-      # Extra options for nixosModules layout
-      nixosModulesExtraOptions = {
-        suffix = lib.mkOption {
-          type = lib.types.str;
-          default = ".nix";
-          description = "File suffix for modules to auto-discover and import";
-          example = ".mod.nix";
-        };
-      };
-    in
     {
       options = {
         systems = lib.mkOption {
@@ -116,21 +29,87 @@ let
 
         layout = lib.mkOption {
           type = lib.types.submodule {
-            freeformType = lib.types.attrs;
             options = {
-              roots = mkLayoutEntry "Roots directories" defaultLayout.roots noExtraOptions;
-              packages = mkLayoutEntry "Packages directories" defaultLayout.packages noExtraOptions;
-              nixosModules =
-                mkLayoutEntry "NixOS modules directories" defaultLayout.nixosModules
-                  nixosModulesExtraOptions;
-              nixosConfigurations =
-                mkLayoutEntry "NixOS configurations directories" defaultLayout.nixosConfigurations
-                  noExtraOptions;
-              devShells = mkLayoutEntry "DevShells directories" defaultLayout.devShells noExtraOptions;
-              apps = mkLayoutEntry "Apps directories" defaultLayout.apps noExtraOptions;
-              lib = mkLayoutEntry "Lib directories" defaultLayout.lib noExtraOptions;
-              checks = mkLayoutEntry "Checks directories" defaultLayout.checks noExtraOptions;
-              templates = mkLayoutEntry "Templates directories" defaultLayout.templates noExtraOptions;
+              roots = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [
+                  ""
+                  "/nix"
+                ];
+                description = "Roots directories";
+              };
+
+              packages.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [
+                  "pkgs"
+                  "packages"
+                ];
+                description = "Packages directories";
+              };
+
+              nixosModules.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [
+                  "modules"
+                  "nixosModules"
+                ];
+                description = "NixOS modules directories";
+              };
+
+              nixosModules.suffix = lib.mkOption {
+                type = lib.types.str;
+                default = ".nix";
+                description = "File suffix for modules to auto-discover and import";
+                example = ".mod.nix";
+              };
+
+              nixosConfigurations.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [
+                  "hosts"
+                  "profiles"
+                  "nixosConfigurations"
+                ];
+                description = "NixOS configurations directories";
+              };
+
+              devShells.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [
+                  "shells"
+                  "devShells"
+                ];
+                description = "DevShells directories";
+              };
+
+              apps.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ "apps" ];
+                description = "Apps directories";
+              };
+
+              lib.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [
+                  "lib"
+                  "tools"
+                  "utils"
+                ];
+                description = "Lib directories";
+              };
+
+              checks.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ "checks" ];
+                description = "Checks directories";
+              };
+
+              templates.subdirs = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ "templates" ];
+                description = "Templates directories";
+              };
             };
           };
           default = { };
@@ -169,5 +148,5 @@ let
     };
 in
 {
-  inherit defaultLayout flakeFhsOptions;
+  inherit flakeFhsOptions;
 }
