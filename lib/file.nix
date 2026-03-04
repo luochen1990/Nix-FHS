@@ -51,7 +51,7 @@ rec {
   # underDir : Path -> Path -> Bool
   # judge whether the path is under the directory
   underDir =
-    directoryPath: path: match ("^" + toString directoryPath + "/.*") (toString path) != null;
+    directoryPath: path: match ("^" + builtins.unsafeDiscardStringContext (toString directoryPath) + "/.*") (toString path) != null;
 
   # list all sub directories including hidden ones
   # lsDirsAll : Path -> [DirName]
