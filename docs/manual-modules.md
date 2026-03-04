@@ -70,6 +70,37 @@ modules/
 }
 ```
 
+#### Custom File Suffix
+
+By default, guarded modules auto-discover and import `.nix` files (excluding `options.nix` and `scope.nix`). You can customize this suffix in your flake.nix:
+
+```nix
+{
+  outputs = inputs@{ flake-fhs, ... }:
+    flake-fhs.lib.mkFlake { inherit inputs; } {
+      layout.nixosModules = {
+        subdirs = [ "modules" ];
+        suffix = ".mod.nix";  # Only import files ending with .mod.nix
+      };
+    };
+}
+```
+
+With this configuration, only files matching the suffix will be auto-imported:
+
+```
+modules/
+└── my-feature/
+    ├── options.nix      # Required: option definitions
+    ├── config.mod.nix   # ✅ Imported (matches suffix)
+    ├── setup.mod.nix    # ✅ Imported (matches suffix)
+    └── helper.nix       # ❌ NOT imported (doesn't match suffix)
+```
+
+This is useful when you want to:
+- Keep helper/internal `.nix` files that shouldn't be auto-imported
+- Use a naming convention to distinguish config files from other files
+
 ### 2. Traditional Directory Module
 
 **Identifier**: Directory contains `default.nix` (without `options.nix`)
@@ -120,19 +151,29 @@ modules/
 
 ### 3. Single File Module
 
-**Identifier**: Standalone `.nix` file in modules directory
+**Identifier**: Standalone file matching the configured suffix (default: `.nix`) in modules directory
 
 **Features**:
 - Direct export, always active
 - No enable mechanism
 - Found recursively in non-guarded, non-traditional directories
+- File suffix is configurable via `layout.nixosModules.suffix`
 
-**Directory Structure**:
+**Directory Structure** (with default suffix `.nix`):
 ```
 modules/
 ├── utils.nix          # Single file module
 └── helpers/
     └── common.nix     # Also a single file module
+```
+
+**Directory Structure** (with custom suffix `.mod.nix`):
+```
+modules/
+├── utils.mod.nix      # Single file module
+├── helper.nix         # ❌ NOT recognized (doesn't match suffix)
+└── helpers/
+    └── common.mod.nix # Single file module
 ```
 
 **Example `utils.nix`**:

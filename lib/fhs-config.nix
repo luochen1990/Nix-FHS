@@ -61,8 +61,10 @@ let
   flakeFhsOptions =
     { lib, ... }:
     let
+      # mkLayoutEntry :: String -> AttrSet -> AttrSet -> Option
+      # Create a layout entry option with optional extra options
       mkLayoutEntry =
-        description: default:
+        description: default: extraOptions:
         lib.mkOption {
           inherit description;
           inherit default;
@@ -71,14 +73,30 @@ let
               (l: { subdirs = l; })
               (
                 lib.types.submodule {
-                  options.subdirs = lib.mkOption {
-                    type = lib.types.listOf (lib.types.either lib.types.str lib.types.path);
-                    description = "List of subdirectories or paths";
-                    default = [ ];
-                  };
+                  options = {
+                    subdirs = lib.mkOption {
+                      type = lib.types.listOf (lib.types.either lib.types.str lib.types.path);
+                      description = "List of subdirectories or paths";
+                      default = [ ];
+                    };
+                  }
+                  // extraOptions;
                 }
               );
         };
+
+      # No extra options for most layout entries
+      noExtraOptions = { };
+
+      # Extra options for nixosModules layout
+      nixosModulesExtraOptions = {
+        suffix = lib.mkOption {
+          type = lib.types.str;
+          default = ".nix";
+          description = "File suffix for modules to auto-discover and import";
+          example = ".mod.nix";
+        };
+      };
     in
     {
       options = {
@@ -100,15 +118,19 @@ let
           type = lib.types.submodule {
             freeformType = lib.types.attrs;
             options = {
-              roots = mkLayoutEntry "Roots directories" defaultLayout.roots;
-              packages = mkLayoutEntry "Packages directories" defaultLayout.packages;
-              nixosModules = mkLayoutEntry "NixOS modules directories" defaultLayout.nixosModules;
-              nixosConfigurations = mkLayoutEntry "NixOS configurations directories" defaultLayout.nixosConfigurations;
-              devShells = mkLayoutEntry "DevShells directories" defaultLayout.devShells;
-              apps = mkLayoutEntry "Apps directories" defaultLayout.apps;
-              lib = mkLayoutEntry "Lib directories" defaultLayout.lib;
-              checks = mkLayoutEntry "Checks directories" defaultLayout.checks;
-              templates = mkLayoutEntry "Templates directories" defaultLayout.templates;
+              roots = mkLayoutEntry "Roots directories" defaultLayout.roots noExtraOptions;
+              packages = mkLayoutEntry "Packages directories" defaultLayout.packages noExtraOptions;
+              nixosModules =
+                mkLayoutEntry "NixOS modules directories" defaultLayout.nixosModules
+                  nixosModulesExtraOptions;
+              nixosConfigurations =
+                mkLayoutEntry "NixOS configurations directories" defaultLayout.nixosConfigurations
+                  noExtraOptions;
+              devShells = mkLayoutEntry "DevShells directories" defaultLayout.devShells noExtraOptions;
+              apps = mkLayoutEntry "Apps directories" defaultLayout.apps noExtraOptions;
+              lib = mkLayoutEntry "Lib directories" defaultLayout.lib noExtraOptions;
+              checks = mkLayoutEntry "Checks directories" defaultLayout.checks noExtraOptions;
+              templates = mkLayoutEntry "Templates directories" defaultLayout.templates noExtraOptions;
             };
           };
           default = { };

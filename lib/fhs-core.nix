@@ -128,7 +128,7 @@ let
 
       # Shared modules for both NixOS configurations and Colmena
       sharedModules = [
-        (flakeFhsLib.getAllModulesDefault moduleDirs)
+        (flakeFhsLib.getAllModulesDefault moduleDirs layout.nixosModules.suffix)
         hostnameModule
       ];
 
@@ -213,7 +213,10 @@ let
     // (flakeFhsLib.mkFormatterOutput args {
       inherit eachSystem;
     })
-    // (flakeFhsLib.mkModulesOutput moduleDirs)
+    // (flakeFhsLib.mkModulesOutput {
+      moduleDirs = moduleDirs;
+      suffix = layout.nixosModules.suffix;
+    })
     // (flakeFhsLib.mkConfigurationsOutput args {
       inherit validHosts sharedModules mkSysContext;
     })

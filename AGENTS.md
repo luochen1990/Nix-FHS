@@ -100,7 +100,7 @@ Module Types (Mutually Exclusive)
 │  └─ Use Case: Configuration sets, complex modules
 │
 └─ Single File Module
-   ├─ Identifier: Standalone .nix file
+   ├─ Identifier: Standalone file matching suffix (default: .nix)
    ├─ Features: Direct export, no enable mechanism
    └─ Use Case: Simple modules
 ```
@@ -108,7 +108,7 @@ Module Types (Mutually Exclusive)
 ### Module Loading Rules
 1. **Guarded Modules**: Directories with `options.nix`
    - Auto-generates `enable` option if not manually defined
-   - All other `.nix` files in the directory are config files (wrapped with `mkIf enable`)
+   - Files matching the configured suffix (default: `.nix`) are config files (wrapped with `mkIf enable`)
    - Nested guarded modules check ALL parent enables (not just immediate parent)
    - **Conflict**: Cannot have both `options.nix` and `default.nix` in the same directory
 
@@ -116,9 +116,22 @@ Module Types (Mutually Exclusive)
    - Directly exported, no enable mechanism
    - **No nesting**: Subdirectories with `default.nix` are NOT recognized as modules
 
-3. **Single File Modules**: Standalone `.nix` files
+3. **Single File Modules**: Standalone files matching the configured suffix (default: `.nix`)
    - Directly exported, no enable mechanism
    - Found recursively in all non-guarded, non-traditional directories
+
+### Module File Suffix Configuration
+The file suffix for auto-discovering config files and single-file modules is configurable:
+```nix
+# flake.nix
+flake-fhs.lib.mkFlake { inherit inputs; } {
+  layout.nixosModules = {
+    subdirs = [ "modules" ];
+    suffix = ".mod.nix";  # Custom suffix (default: ".nix")
+  };
+}
+```
+This allows keeping helper `.nix` files that shouldn't be auto-imported alongside config files.
 
 ### Module Output Structure
 - **Individual Module Outputs**: Each module generates a single output:

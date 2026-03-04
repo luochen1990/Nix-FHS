@@ -91,7 +91,7 @@ let
   # 1. mkGuardedTree - Guarded 模块的 SSOT
   # ================================================================
 
-  # mkGuardedTreeNode :: { modPath, path, parentGuardedPaths } -> GuardedTree
+  # mkGuardedTreeNode :: { modPath, path, parentGuardedPaths, suffix } -> GuardedTree
   #
   # 递归构建 guarded 模块树
   # - 检测 options.nix + default.nix 冲突
@@ -103,6 +103,7 @@ let
       modPath,
       path,
       parentGuardedPaths,
+      suffix,
     }:
     let
       files = lsFiles path;
@@ -117,10 +118,11 @@ let
       );
 
       # 收集 unguarded 配置文件 (仅对没有 default.nix 的 guarded 模块)
+      # 使用配置的 suffix 来过滤文件
       unguardedFiles =
         if hasOptions && !hasDefault then
           forFilter files (
-            f: if hasSuffix ".nix" f && f != "options.nix" && f != "scope.nix" then path + "/${f}" else null
+            f: if hasSuffix suffix f && f != "options.nix" && f != "scope.nix" then path + "/${f}" else null
           )
         else
           [ ];
@@ -153,6 +155,7 @@ let
           path = it.path;
           # 传递更新后的父级 guarded 路径给子级
           parentGuardedPaths = currentParentGuardedPaths;
+          inherit suffix;
         };
       });
     in
@@ -168,13 +171,14 @@ let
       inherit parentGuardedPaths fullGuardedPath;
     };
 
-  # mkGuardedTree :: Path -> GuardedTree
+  # mkGuardedTree :: Path -> String -> GuardedTree
   mkGuardedTree =
-    root:
+    root: suffix:
     mkGuardedTreeNode {
       modPath = [ ];
       path = root;
       parentGuardedPaths = [ ];
+      inherit suffix;
     };
 
   # ================================================================
@@ -427,13 +431,13 @@ let
   # 4. Module Collection
   # ================================================================
 
-  # collectModules :: Path -> [ModuleInfo]
+  # collectModules :: Path -> String -> [ModuleInfo]
   # 收集所有三种类型的模块
   collectModules =
-    root:
+    root: suffix:
     let
       # 1. 构建 guarded 树
-      guardedTree = mkGuardedTree root;
+      guardedTree = mkGuardedTree root suffix;
 
       # 2. 收集所有 guarded 节点 (递归)
       collectGuardedNodes = tree: [ tree ] ++ concatLists (map collectGuardedNodes tree.guardedChildren);
@@ -491,14 +495,14 @@ let
             else
               [ ];
 
-          # 单文件模块
+          # 单文件模块 - 使用配置的 suffix 过滤
           single =
             if !isGuarded && !hasDefault then
               forFilter files (
                 f:
-                if hasSuffix ".nix" f then
+                if hasSuffix suffix f then
                   let
-                    name = lib.removeSuffix ".nix" f;
+                    name = lib.removeSuffix suffix f;
                   in
                   [
                     {
@@ -570,13 +574,13 @@ let
   # 5. Output Generation
   # ================================================================
 
-  # mkModulesOutputSingle :: Path -> { modules :: [{ name :: String, value :: Module }], default :: Module }
+  # mkModulesOutputSingle :: Path -> String -> { modules :: [{ name :: String, value :: Module }], default :: Module }
   # 为单个目录生成模块输出
   mkModulesOutputSingle =
-    modulesDir:
+    modulesDir: suffix:
     let
-      guardedTree = mkGuardedTree modulesDir;
-      moduleInfos = collectModules modulesDir;
+      guardedTree = mkGuardedTree modulesDir suffix;
+      moduleInfos = collectModules modulesDir suffix;
 
       # 生成独立模块输出
       modules = map (info: {
@@ -595,13 +599,13 @@ let
       default = defaultModule;
     };
 
-  # mkModulesOutput :: [Path] -> { nixosModules :: AttrSet }
+  # mkModulesOutput :: { moduleDirs :: [Path], suffix :: String } -> { nixosModules :: AttrSet }
   # 为多个目录生成模块输出
   mkModulesOutput =
-    modulesDirs:
+    { moduleDirs, suffix }:
     let
       # 收集所有目录的模块
-      allOutputs = map mkModulesOutputSingle modulesDirs;
+      allOutputs = map (dir: mkModulesOutputSingle dir suffix) moduleDirs;
 
       # 合并所有模块
       allModules = concatLists (map (o: o.modules) allOutputs);
@@ -629,12 +633,12 @@ let
       };
     };
 
-  # getAllModulesDefault :: [Path] -> Module
+  # getAllModulesDefault :: [Path] -> String -> Module
   # 获取所有模块的 default 模块 (用于 sharedModules)
   getAllModulesDefault =
-    modulesDirs:
+    modulesDirs: suffix:
     let
-      allOutputs = map mkModulesOutputSingle modulesDirs;
+      allOutputs = map (dir: mkModulesOutputSingle dir suffix) modulesDirs;
       allModules = concatLists (map (o: o.modules) allOutputs);
     in
     {
