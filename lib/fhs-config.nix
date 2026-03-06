@@ -4,6 +4,12 @@
 #
 lib:
 let
+  inherit (import ./file.nix) trimPath;
+
+  # trimPathList : [String] -> [String]
+  # Apply trimPath to each element in the list
+  trimPathList = paths: map trimPath paths;
+
   # ================================================================
   # Configuration Schema
   # ================================================================
@@ -35,6 +41,7 @@ let
                 default = [
                   ""
                 ];
+                apply = trimPathList;
                 description = "Roots directories";
               };
 
@@ -44,6 +51,7 @@ let
                   "pkgs"
                   "packages"
                 ];
+                apply = trimPathList;
                 description = "Packages directories";
               };
 
@@ -53,6 +61,7 @@ let
                   "modules"
                   "nixosModules"
                 ];
+                apply = trimPathList;
                 description = "NixOS modules directories";
               };
 
@@ -69,6 +78,7 @@ let
                   "hosts"
                   "nixosConfigurations"
                 ];
+                apply = trimPathList;
                 description = "NixOS configurations directories";
               };
 
@@ -78,12 +88,14 @@ let
                   "shells"
                   "devShells"
                 ];
+                apply = trimPathList;
                 description = "DevShells directories";
               };
 
               apps.subdirs = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ "apps" ];
+                apply = trimPathList;
                 description = "Apps directories";
               };
 
@@ -92,18 +104,21 @@ let
                 default = [
                   "lib"
                 ];
+                apply = trimPathList;
                 description = "Lib directories";
               };
 
               checks.subdirs = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ "checks" ];
+                apply = trimPathList;
                 description = "Checks directories";
               };
 
               templates.subdirs = lib.mkOption {
                 type = lib.types.listOf lib.types.str;
                 default = [ "templates" ];
+                apply = trimPathList;
                 description = "Templates directories";
               };
             };

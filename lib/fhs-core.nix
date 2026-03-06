@@ -18,7 +18,6 @@ let
     dict
     forFilter
     exploreDir
-    trimPath
     ;
 
   # Core implementation of mkFlake logic
@@ -46,7 +45,7 @@ let
       roots = forFilter layout.roots (
         d:
         let
-          p = self.outPath + "/${trimPath d}";
+          p = self.outPath + "/${d}";
         in
         if pathExists p then p else null
       );
