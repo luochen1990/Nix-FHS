@@ -30,7 +30,8 @@ nix flake init --template github:luochen1990/flake-fhs
 
 ## Documentation
 
-Visit the official documentation site: **[flake-fhs.lambda.lc](https://flake-fhs.lambda.lc)**
+- Visit the official documentation site: [**flake-fhs.lambda.lc**](https://flake-fhs.lambda.lc)
+- Or GitHub Docs Repo：[**flake-fhs-docs**](https://github.com/luochen1990/flake-fhs-docs/tree/master/src/content/docs) when the website is down
 
 ---
 MIT License | Copyright © 2025 Luochen
