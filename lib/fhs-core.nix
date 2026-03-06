@@ -170,19 +170,33 @@ let
         };
       });
 
+      # ================================================================
+      # Formatter & devShells outputs
+      # ================================================================
+
+      formatter = (flakeFhsLib.mkFormatterOutput args { inherit eachSystem; }).formatter;
+
+      allProjectDrvs =
+        sysContext:
+        let
+          load = subdir: map (i: i.value) (flakeFhsLib.loadScopedOutputs args roots subdir sysContext);
+        in
+        load layout.packages.subdirs ++ load layout.apps.subdirs ++ load layout.checks.subdirs;
+
+      devShells =
+        (flakeFhsLib.mkShellsOutput args {
+          inherit
+            roots
+            partOf
+            eachSystem
+            allProjectDrvs
+            formatter
+            ;
+        }).devShells;
+
     in
     {
       # Generate all flake outputs
-
-      # outputs:
-      #  pkgs/        # subdirs marked by package.nix
-      #  modules/     # unguarded & guarded by options.nix
-      #  hosts/       # marked by configuration.nix
-      #  shells/      # top-level files & subdirs marked by shell.nix
-      #  apps/        # top-level files & subdirs marked by default.nix
-      #  utils/       # more/ and other .nix files
-      #  checks/      # top-level files & subdirs marked by default.nix
-      #  templates/   # top-level subdirs marked by templates.nix
 
       packages = eachSystem (
         sysContext:
@@ -193,7 +207,6 @@ let
         sysContext:
         let
           inherit (flakeFhsLib) inferMainProgram;
-          # 1. Collect all packages from 'apps' directories
           rawApps = flakeFhsLib.loadScopedOutputs args roots layout.apps.subdirs sysContext;
         in
         listToAttrs (
@@ -215,6 +228,8 @@ let
         inherit roots lib;
         libSubdirs = layout.lib.subdirs;
       };
+
+      inherit formatter devShells;
     }
     // (flakeFhsLib.mkColmenaOutput args {
       inherit validHosts sharedModules mkSysContext;
@@ -222,15 +237,9 @@ let
     // (flakeFhsLib.mkTemplatesOutput args {
       inherit roots;
     })
-    // (flakeFhsLib.mkFormatterOutput args {
-      inherit eachSystem;
-    })
     // modulesOutput
     // (flakeFhsLib.mkConfigurationsOutput args {
       inherit validHosts sharedModules mkSysContext;
-    })
-    // (flakeFhsLib.mkShellsOutput args {
-      inherit roots partOf eachSystem;
     });
 in
 {

@@ -1,6 +1,8 @@
 # © Copyright 2025 罗宸 (luochen1990@gmail.com, https://lambda.lc)
 #
 # Flake FHS devShells output implementation
+# - Loads user-defined shells from shells/ directory
+# - Auto-generates default devShell from project derivations (if not user-defined)
 #
 flakeFhsLib:
 let
@@ -27,9 +29,12 @@ in
       roots,
       partOf,
       eachSystem,
+      allProjectDrvs,
+      formatter,
     }:
-    {
-      devShells = eachSystem (
+    let
+      # Load user-defined shells from directory
+      userShells =
         sysContext:
         listToAttrs (
           concatLists (
@@ -66,7 +71,19 @@ in
               pick = out != [ ];
             })
           )
-        )
+        );
+
+    in
+    {
+      devShells = eachSystem (
+        sysContext:
+        {
+          default = sysContext.pkgs.mkShell {
+            inputsFrom = allProjectDrvs sysContext;
+            packages = [ formatter.${sysContext.system} ];
+          };
+        }
+        // userShells sysContext
       );
     };
 }
