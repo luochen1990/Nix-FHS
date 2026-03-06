@@ -18,6 +18,7 @@ from typing import Dict, List, NamedTuple, Optional
 
 class TestResult(NamedTuple):
     """Simplified test result."""
+
     name: str
     passed: bool
     message: str
@@ -26,6 +27,7 @@ class TestResult(NamedTuple):
 
 class ValidationResult(NamedTuple):
     """Template validation result."""
+
     template: str
     passed: bool
     results: List[TestResult]
@@ -40,27 +42,36 @@ class TemplateValidator:
         self.templates_dir = templates_dir
         self.project_root = project_root
 
-    def _run_nix(self, cmd: List[str], cwd: Optional[Path] = None) -> subprocess.CompletedProcess:
+    def _run_nix(
+        self, cmd: List[str], cwd: Optional[Path] = None
+    ) -> subprocess.CompletedProcess:
         """Run nix command with experimental features."""
         full_cmd = [
             "nix",
-            "--extra-experimental-features", "nix-command",
-            "--extra-experimental-features", "flakes",
-            #"--option", "sandbox", "false",
-            #"--option", "allow-dirty", "true",
-            *cmd
+            "--extra-experimental-features",
+            "nix-command",
+            "--extra-experimental-features",
+            "flakes",
+            # "--option", "sandbox", "false",
+            # "--option", "allow-dirty", "true",
+            *cmd,
         ]
-        return subprocess.run(full_cmd, cwd=cwd, capture_output=True, text=True, timeout=300)
+        return subprocess.run(
+            full_cmd, cwd=cwd, capture_output=True, text=True, timeout=300
+        )
 
     def _check_github_url(self, template_path: Path) -> TestResult:
         """Check template uses correct GitHub URL."""
         try:
             content = (template_path / "flake.nix").read_text()
             if self.EXPECTED_GITHUB_URL in content:
-                return TestResult("github_url", True, "Template uses correct GitHub URL")
+                return TestResult(
+                    "github_url", True, "Template uses correct GitHub URL"
+                )
             return TestResult(
-                "github_url", False,
-                f"Template does not use expected GitHub URL: {self.EXPECTED_GITHUB_URL}"
+                "github_url",
+                False,
+                f"Template does not use expected GitHub URL: {self.EXPECTED_GITHUB_URL}",
             )
         except Exception as e:
             return TestResult("github_url", False, f"Error reading template: {e}")
@@ -73,7 +84,9 @@ class TemplateValidator:
                 return TestResult("flake_check", True, "nix flake check passed")
 
             error_msg = result.stderr.strip()
-            return TestResult("flake_check", False, f"nix flake check failed: {error_msg}")
+            return TestResult(
+                "flake_check", False, f"nix flake check failed: {error_msg}"
+            )
         except Exception as e:
             return TestResult("flake_check", False, f"Error running flake check: {e}")
 
@@ -90,11 +103,15 @@ class TemplateValidator:
             # Truncate error message if too long
             if len(error_msg) > 500:
                 error_msg = error_msg[:500] + "..."
-            return TestResult("apps_eval", False, f"apps evaluation failed: {error_msg}")
+            return TestResult(
+                "apps_eval", False, f"apps evaluation failed: {error_msg}"
+            )
         except Exception as e:
             return TestResult("apps_eval", False, f"Error running apps evaluation: {e}")
 
-    def _check_nixos_modules(self, temp_dir: Path, template_name: str) -> Optional[TestResult]:
+    def _check_nixos_modules(
+        self, temp_dir: Path, template_name: str
+    ) -> Optional[TestResult]:
         """Check nixosModules contains expected nested modules (only for 'std' template)."""
         if template_name != "std":
             return None
@@ -102,13 +119,19 @@ class TemplateValidator:
         try:
             result = self._run_nix(["flake", "show", "--json"], cwd=temp_dir)
             if result.returncode != 0:
-                return TestResult("nixos_modules", False, f"nix flake show failed: {result.stderr.strip()}")
+                return TestResult(
+                    "nixos_modules",
+                    False,
+                    f"nix flake show failed: {result.stderr.strip()}",
+                )
 
             output = json.loads(result.stdout)
             nixos_modules = output.get("nixosModules", {})
 
             if not nixos_modules:
-                return TestResult("nixos_modules", False, "No nixosModules found in flake output")
+                return TestResult(
+                    "nixos_modules", False, "No nixosModules found in flake output"
+                )
 
             # Check for nested guarded module "services/web-server"
             # The module is exported with "/" as path separator
@@ -116,15 +139,20 @@ class TemplateValidator:
             found = expected_module in nixos_modules
 
             if found:
-                return TestResult("nixos_modules", True, f"Found module '{expected_module}'")
+                return TestResult(
+                    "nixos_modules", True, f"Found module '{expected_module}'"
+                )
             else:
                 available = list(nixos_modules.keys())
                 return TestResult(
-                    "nixos_modules", False,
-                    f"Module '{expected_module}' not found. Available: {available}"
+                    "nixos_modules",
+                    False,
+                    f"Module '{expected_module}' not found. Available: {available}",
                 )
         except Exception as e:
-            return TestResult("nixos_modules", False, f"Error checking nixosModules: {e}")
+            return TestResult(
+                "nixos_modules", False, f"Error checking nixosModules: {e}"
+            )
 
     def _create_temp_template(self, template_path: Path, temp_dir: Path) -> TestResult:
         """Create temporary template with local FlakeFHS."""
@@ -149,12 +177,20 @@ class TemplateValidator:
 
                 # Use absolute path to avoid circular references
                 project_root_abs = str(self.project_root.resolve())
-                modified = content.replace(self.EXPECTED_GITHUB_URL, f"path:{project_root_abs}")
+                modified = content.replace(
+                    self.EXPECTED_GITHUB_URL, f"path:{project_root_abs}"
+                )
                 flake_nix.write_text(modified)
 
                 if "path:" in modified and self.EXPECTED_GITHUB_URL not in modified:
-                    return TestResult("temp_template", True, f"Temporary template created with path:{project_root_abs}")
-                return TestResult("temp_template", False, "Failed to replace GitHub URL")
+                    return TestResult(
+                        "temp_template",
+                        True,
+                        f"Temporary template created with path:{project_root_abs}",
+                    )
+                return TestResult(
+                    "temp_template", False, "Failed to replace GitHub URL"
+                )
             return TestResult("temp_template", False, "flake.nix not found in template")
         except Exception as e:
             return TestResult("temp_template", False, f"Error creating template: {e}")
@@ -164,13 +200,19 @@ class TemplateValidator:
         template_path = self.templates_dir / template_name
 
         if not template_path.exists():
-            return ValidationResult(template_name, False, [
-                TestResult("template_check", False, f"Template directory not found: {template_path}")
-            ])
+            return ValidationResult(
+                template_name,
+                False,
+                [
+                    TestResult(
+                        "template_check",
+                        False,
+                        f"Template directory not found: {template_path}",
+                    )
+                ],
+            )
 
-        results = [
-            self._check_github_url(template_path)
-        ]
+        results = [self._check_github_url(template_path)]
 
         # Test with local FlakeFHS
         temp_dir = Path(tempfile.mkdtemp(prefix="template-test-"))
@@ -201,17 +243,34 @@ class TemplateValidator:
     def validate_all(self) -> Dict[str, ValidationResult]:
         """Validate all templates."""
         if not self.templates_dir.exists():
-            return {"error": ValidationResult("error", False, [
-                TestResult("setup", False, f"Templates directory not found: {self.templates_dir}")
-            ])}
+            return {
+                "error": ValidationResult(
+                    "error",
+                    False,
+                    [
+                        TestResult(
+                            "setup",
+                            False,
+                            f"Templates directory not found: {self.templates_dir}",
+                        )
+                    ],
+                )
+            }
 
-        template_dirs = [d for d in self.templates_dir.iterdir()
-                        if d.is_dir() and not d.name.startswith('.')]
+        template_dirs = [
+            d
+            for d in self.templates_dir.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
 
         if not template_dirs:
-            return {"error": ValidationResult("error", False, [
-                TestResult("setup", False, "No template directories found")
-            ])}
+            return {
+                "error": ValidationResult(
+                    "error",
+                    False,
+                    [TestResult("setup", False, "No template directories found")],
+                )
+            }
 
         return {d.name: self.validate_template(d.name) for d in template_dirs}
 
@@ -223,10 +282,15 @@ def main():
     parser = argparse.ArgumentParser(description="Validate FlakeFHS templates")
 
     # Required arguments to avoid path resolution issues
-    parser.add_argument("--project-root", type=Path, default='.',
-                       help="Path to project root directory")
-    parser.add_argument("--templates-dir", type=Path, default='./templates',
-                       help="Path to templates directory")
+    parser.add_argument(
+        "--project-root", type=Path, default=".", help="Path to project root directory"
+    )
+    parser.add_argument(
+        "--templates-dir",
+        type=Path,
+        default="./templates",
+        help="Path to templates directory",
+    )
     parser.add_argument("--format", choices=["text", "json"], default="text")
     parser.add_argument("--template", type=str, help="Validate specific template only")
 
@@ -234,7 +298,9 @@ def main():
 
     # Validate paths exist
     if not args.templates_dir.exists():
-        print(f"❌ Templates directory not found: {args.templates_dir}", file=sys.stderr)
+        print(
+            f"❌ Templates directory not found: {args.templates_dir}", file=sys.stderr
+        )
         sys.exit(1)
 
     if not args.project_root.exists():
@@ -260,8 +326,15 @@ def main():
             json_data[name] = {
                 "template": result.template,
                 "passed": result.passed,
-                "tests": [{"name": t.name, "passed": t.passed, "message": t.message, "details": t.details}
-                        for t in result.results]
+                "tests": [
+                    {
+                        "name": t.name,
+                        "passed": t.passed,
+                        "message": t.message,
+                        "details": t.details,
+                    }
+                    for t in result.results
+                ],
             }
         print(json.dumps(json_data, indent=2))
     else:
@@ -280,7 +353,10 @@ def main():
             for test in result.results:
                 if test.passed:
                     icon = "✅"
-                elif test.name == "flake_check" and "sandbox restrictions" in test.message:
+                elif (
+                    test.name == "flake_check"
+                    and "sandbox restrictions" in test.message
+                ):
                     icon = "⚠️"
                 else:
                     icon = "❌"
