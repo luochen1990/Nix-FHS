@@ -5,10 +5,8 @@
 flakeFhsLib:
 let
   inherit (builtins)
-    head
     tail
     elem
-    hasAttr
     pathExists
     listToAttrs
     concatLists
@@ -18,13 +16,8 @@ let
 
   inherit (flakeFhsLib)
     dict
-    for
     forFilter
-    concatFor
     exploreDir
-    lsDirs
-    lsFiles
-    hasSuffix
     trimPath
     ;
 
@@ -44,7 +37,7 @@ let
         ;
 
       partOf = mapAttrs (
-        name: value: x:
+        _name: value: x:
         elem x value.subdirs
       ) layout;
 
