@@ -25,7 +25,7 @@ in
         map (
           host:
           let
-            sysContext = mkSysContext host.info.system;
+            sysContext = mkSysContext host.info;
             modules = sharedModules ++ [
               (host.path + "/configuration.nix")
             ];

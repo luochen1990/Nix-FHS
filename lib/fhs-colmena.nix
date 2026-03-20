@@ -45,18 +45,18 @@ in
         colmenaHive = inputs.colmena.lib.makeHive (
           {
             meta = {
-              nixpkgs = (mkSysContext (head supportedSystems)).pkgs;
+              nixpkgs = (mkSysContext { system = head supportedSystems; }).pkgs;
               nodeNixpkgs = listToAttrs (
                 map (host: {
                   name = host.name;
-                  value = (mkSysContext host.info.system).pkgs;
+                  value = (mkSysContext host.info).pkgs;
                 }) validHosts
               );
               nodeSpecialArgs = listToAttrs (
                 map (
                   host:
                   let
-                    sysContext = mkSysContext host.info.system;
+                    sysContext = mkSysContext host.info;
                   in
                   {
                     name = host.name;

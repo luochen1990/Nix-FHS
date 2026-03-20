@@ -36,6 +36,7 @@ flakeFhsLib: {
         supportedSystems = config.systems;
         colmena = config.colmena;
         nixpkgsConfig = config.nixpkgs.config;
+        nixpkgsOverlays = config.nixpkgs.overlays;
         layout = config.layout;
         systemContext = config.systemContext;
       };

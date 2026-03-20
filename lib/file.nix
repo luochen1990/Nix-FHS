@@ -51,7 +51,9 @@ rec {
   # underDir : Path -> Path -> Bool
   # judge whether the path is under the directory
   underDir =
-    directoryPath: path: match ("^" + builtins.unsafeDiscardStringContext (toString directoryPath) + "/.*") (toString path) != null;
+    directoryPath: path:
+    match ("^" + builtins.unsafeDiscardStringContext (toString directoryPath) + "/.*") (toString path)
+    != null;
 
   # list all sub directories including hidden ones
   # lsDirsAll : Path -> [DirName]
@@ -193,21 +195,21 @@ rec {
     suffix: dir: if builtins.pathExists dir then (findFilesRec (hasSuffix suffix) dir) else [ ];
 
   # importUnguardedFiles : String -> Path -> [Path]
-  # 
+  #
   # 收集目录下的文件，尊重模块边界
-  # 
+  #
   # 行为:
   # - 收集当前目录下匹配后缀的文件
   # - 对于子目录:
   #   - 如果有 options.nix (guarded module)，跳过（由 flake-fhs 处理）
   #   - 如果有 default.nix，跳过（它有自己的导入逻辑）
   #   - 否则，递归处理
-  # 
+  #
   # 职责边界:
   # - 这个函数只负责收集 unguarded 的配置文件
   # - 有 default.nix 的目录由其他机制处理（如 flake-fhs 或手动导入）
   # - guarded module 由 flake-fhs 自动生成虚拟 default.nix
-  # 
+  #
   # 示例:
   #   # bedrock/default.nix
   #   { tools, ... }: {
@@ -219,19 +221,15 @@ rec {
     let
       d = readDir root;
       names = attrNames d;
-      
+
       # forFilter 的本地实现
       filterMap = f: xs: filter (x: x != null) (map f xs);
-      
+
       # 收集当前目录下的文件
       currentFiles = filterMap (
-        name:
-        if d.${name} == "regular" && hasSuffix suffix name then
-          root + "/${name}"
-        else
-          null
+        name: if d.${name} == "regular" && hasSuffix suffix name then root + "/${name}" else null
       ) names;
-      
+
       # 处理子目录
       subDirImports = filterMap (
         name:

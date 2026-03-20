@@ -31,6 +31,7 @@ let
         lib
         supportedSystems
         nixpkgsConfig
+        nixpkgsOverlays
         layout
         systemContext
         ;
@@ -52,12 +53,19 @@ let
 
       # system related context
       mkSysContext =
-        system:
+        systemInfo:
         let
+          system = systemInfo.system or (lib.head supportedSystems);
+          hostNixpkgsConfig =
+            nixpkgsConfig // ((systemInfo.nixpkgs or { }).config or systemInfo.nixpkgsConfig or { });
+          hostNixpkgsOverlays =
+            nixpkgsOverlays ++ ((systemInfo.nixpkgs or { }).overlays or systemInfo.nixpkgsOverlays or [ ]);
+
           pkgs = (
             import nixpkgs {
               inherit system;
-              config = nixpkgsConfig;
+              config = hostNixpkgsConfig;
+              overlays = hostNixpkgsOverlays;
             }
           );
           preparedLib = flakeFhsLib.prepareLib {
@@ -66,7 +74,14 @@ let
             lib = mergedLib;
           };
           mergedLib = flakeFhsLib // preparedLib // lib; # TODO: configurable
-          userCtx = systemContext system;
+          userCtx = systemContext {
+            inherit
+              system
+              pkgs
+              ;
+            config = hostNixpkgsConfig;
+            overlays = hostNixpkgsOverlays;
+          };
           specialArgs = {
             inherit
               self
@@ -99,7 +114,7 @@ let
         dict supportedSystems (
           system:
           let
-            sysContext = mkSysContext system;
+            sysContext = mkSysContext { inherit system; };
           in
           outputBuilder sysContext
         );

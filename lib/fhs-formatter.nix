@@ -25,7 +25,7 @@ in
           treefmtToml = self.outPath + "/treefmt.toml";
         in
         if (inputs ? treefmt-nix) && pathExists treefmtNix then
-            (inputs.treefmt-nix.lib.evalModule pkgs treefmtNix).config.build.wrapper
+          (inputs.treefmt-nix.lib.evalModule pkgs treefmtNix).config.build.wrapper
         else if pathExists treefmtToml then
           pkgs.treefmt
         else

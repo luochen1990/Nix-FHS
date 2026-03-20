@@ -33,6 +33,12 @@ let
           description = "Nixpkgs configuration";
         };
 
+        nixpkgs.overlays = lib.mkOption {
+          type = lib.types.listOf lib.types.unspecified;
+          default = [ ];
+          description = "Nixpkgs overlays";
+        };
+
         layout = lib.mkOption {
           type = lib.types.submodule {
             options = {
